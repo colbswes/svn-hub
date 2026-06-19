@@ -46,3 +46,6 @@
 # Uncomment the following line to run the EveryMinute.groovy file
 #* * * * * EveryMinute
 
+# SvnHub: refresh cached HEAD revision and warm the commit cache every 5 minutes.
+*/5 * * * * RefreshRepoHead
+

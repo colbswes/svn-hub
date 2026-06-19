@@ -9,6 +9,7 @@ import org.kissweb.restServer.MainServlet
 import org.kissweb.UserException
 import com.svnhub.SvnRepo
 import com.svnhub.SvnAuthManager
+import com.svnhub.RepoAccess
 
 /**
  * Repository management for SvnHub.
@@ -24,7 +25,7 @@ class RepositoryService {
     /** Repositories visible to the caller (all of them for an admin). */
     void getRepositories(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
-        boolean admin = isAdmin(db, userId)
+        boolean admin = RepoAccess.isAdmin(db, userId)
         List<Record> recs
         if (admin)
             recs = db.fetchAll("select * from repository where is_active = 'Y' order by name")
@@ -44,12 +45,12 @@ class RepositoryService {
     void getRepository(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
         int repoId = injson.getInt("repoId")
-        requireRead(db, userId, repoId)
+        RepoAccess.requireRead(db, userId, repoId)
         Record r = db.fetchOne("select * from repository where repo_id = ?", repoId)
         if (r == null)
             throw new UserException("Repository not found.")
         outjson.put("repo", repoRow(r))
-        outjson.put("access", accessLevel(db, userId, repoId))
+        outjson.put("access", accessJson(db, userId, repoId))
     }
 
     // ----------------------------------------------------------------- create
@@ -119,7 +120,7 @@ class RepositoryService {
     void updateRepository(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
         int repoId = injson.getInt("repoId")
-        requireAdmin(db, userId, repoId)
+        RepoAccess.requireAdmin(db, userId, repoId)
         Record r = db.fetchOne("select * from repository where repo_id = ?", repoId)
         if (r == null)
             throw new UserException("Repository not found.")
@@ -142,7 +143,7 @@ class RepositoryService {
      */
     void scanRepositories(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
-        if (!isAdmin(db, userId))
+        if (!RepoAccess.isAdmin(db, userId))
             throw new UserException("Only an administrator may scan for repositories.")
         File root = new File(reposRoot())
         int added = 0
@@ -200,35 +201,13 @@ class RepositoryService {
         return c + "/passwd"
     }
 
-    static boolean isAdmin(Connection db, Integer userId) {
-        Record u = db.fetchOne("select is_admin from users where user_id = ?", userId)
-        return u != null && "Y".equals(u.getString("is_admin"))
-    }
-
     /** {read, write, admin} for the caller on a repo (an admin gets all). */
-    static JSONObject accessLevel(Connection db, Integer userId, int repoId) {
+    private static JSONObject accessJson(Connection db, Integer userId, int repoId) {
         JSONObject a = new JSONObject()
-        if (isAdmin(db, userId)) {
-            a.put("read", true)
-            a.put("write", true)
-            a.put("admin", true)
-            return a
-        }
-        Record ra = db.fetchOne("select * from repository_access where repo_id = ? and user_id = ?", repoId, userId)
-        a.put("read", ra != null && "Y".equals(ra.getString("can_read")))
-        a.put("write", ra != null && "Y".equals(ra.getString("can_write")))
-        a.put("admin", ra != null && "Y".equals(ra.getString("can_admin")))
+        a.put("read", RepoAccess.canRead(db, userId, repoId))
+        a.put("write", RepoAccess.canWrite(db, userId, repoId))
+        a.put("admin", RepoAccess.canAdmin(db, userId, repoId))
         return a
-    }
-
-    static void requireRead(Connection db, Integer userId, int repoId) {
-        if (!accessLevel(db, userId, repoId).getBoolean("read"))
-            throw new UserException("You do not have access to this repository.")
-    }
-
-    static void requireAdmin(Connection db, Integer userId, int repoId) {
-        if (!accessLevel(db, userId, repoId).getBoolean("admin"))
-            throw new UserException("You do not have administrative access to this repository.")
     }
 
     private static JSONObject repoRow(Record r) {

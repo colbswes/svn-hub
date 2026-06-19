@@ -8,6 +8,7 @@ import org.kissweb.restServer.ProcessServlet
 import org.kissweb.restServer.MainServlet
 import org.kissweb.UserException
 import com.svnhub.SvnAuthManager
+import com.svnhub.RepoAccess
 
 /**
  * Per-repository access management.  Every change re-serializes the svnserve
@@ -19,7 +20,7 @@ class RepositoryAccessService {
     void getAccess(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
         int repoId = injson.getInt("repoId")
-        RepositoryService.requireAdmin(db, userId, repoId)
+        RepoAccess.requireAdmin(db, userId, repoId)
 
         List<Record> grants = db.fetchAll("""select ra.*, u.user_name, u.full_name, u.svn_password
                 from repository_access ra join users u on u.user_id = ra.user_id
@@ -56,7 +57,7 @@ class RepositoryAccessService {
     void grant(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
         int repoId = injson.getInt("repoId")
-        RepositoryService.requireAdmin(db, userId, repoId)
+        RepoAccess.requireAdmin(db, userId, repoId)
         int targetUser = injson.getInt("userId")
         String canRead = injson.getBoolean("canRead", true) ? "Y" : "N"
         String canWrite = injson.getBoolean("canWrite", false) ? "Y" : "N"
@@ -85,7 +86,7 @@ class RepositoryAccessService {
     void revoke(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
         int repoId = injson.getInt("repoId")
-        RepositoryService.requireAdmin(db, userId, repoId)
+        RepoAccess.requireAdmin(db, userId, repoId)
         int targetUser = injson.getInt("userId")
         db.execute("delete from repository_access where repo_id = ? and user_id = ?", repoId, targetUser)
         regenerate(db, repoId)
@@ -100,7 +101,7 @@ class RepositoryAccessService {
     void setSvnPassword(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
         int targetUser = injson.getInt("userId", userId)
-        if (targetUser != userId && !RepositoryService.isAdmin(db, userId))
+        if (targetUser != userId && !RepoAccess.isAdmin(db, userId))
             throw new UserException("You may only set your own SVN password.")
         String pw = injson.getString("svnPassword", "")
         if (!pw)

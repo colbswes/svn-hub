@@ -1,0 +1,57 @@
+<div>
+    <style>
+        .repo-head-bar { display: flex; align-items: center; gap: 14px; }
+        .repo-name { font-size: 20px; font-weight: 600; }
+        .repo-head-rev { color: #57606a; }
+        .repo-path-bar { margin: 10px 0; display: flex; align-items: center; gap: 10px; }
+        .repo-path { font-family: monospace; background: #f6f8fa; padding: 3px 8px; border-radius: 4px; }
+        .repo-section-title { font-weight: 600; margin: 16px 0 6px; }
+        .repo-render { border: 1px solid #d0d7de; border-radius: 6px; padding: 14px;
+                       max-height: 460px; overflow: auto; background: #fff; }
+        .code-render { font-family: monospace; white-space: pre; overflow: auto; max-height: 60vh;
+                       border: 1px solid #d0d7de; border-radius: 6px; padding: 10px; background: #fff; }
+    </style>
+
+    <div class="repo-head-bar">
+        <push-button id="back">&larr; Repositories</push-button>
+        <span class="repo-name"><text-label id="repo-title"></text-label></span>
+        <span class="repo-head-rev"><text-label id="repo-head"></text-label></span>
+    </div>
+
+    <div class="repo-path-bar">
+        <span>Path:</span>
+        <span class="repo-path"><text-label id="crumb"></text-label></span>
+        <push-button id="up">Up</push-button>
+    </div>
+
+    <div id="browse-grid" style="width: 100%; height: 300px;"></div>
+
+    <div class="repo-section-title">README</div>
+    <div class="repo-render"><text-label id="readme"></text-label></div>
+
+    <div class="repo-section-title">Recent commits</div>
+    <div id="commits-grid" style="width: 100%; height: 220px;"></div>
+
+    <!-- File view popup -->
+    <popup id="file-popup" width="900px" height="640px">
+        <popup-title><text-label id="fp-title"></text-label></popup-title>
+        <popup-body>
+            <div class="code-render"><text-label id="fp-content"></text-label></div>
+            <div style="margin-top: 12px; text-align: right;">
+                <push-button id="fp-close">Close</push-button>
+            </div>
+        </popup-body>
+    </popup>
+
+    <!-- Revision / diff popup -->
+    <popup id="rev-popup" width="980px" height="700px">
+        <popup-title><text-label id="rev-title"></text-label></popup-title>
+        <popup-body>
+            <div style="margin-bottom: 8px;"><text-label id="rev-info"></text-label></div>
+            <div class="repo-render" style="max-height: 520px;"><text-label id="rev-diff"></text-label></div>
+            <div style="margin-top: 10px; text-align: right;">
+                <push-button id="rev-close">Close</push-button>
+            </div>
+        </popup-body>
+    </popup>
+</div>

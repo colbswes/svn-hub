@@ -675,6 +675,7 @@ public class Tasks {
         dep.add(LIBS, "sqljet-1.1.13.jar");
         dep.add(LIBS, "sequence-library-1.0.4.jar");
         dep.add(LIBS, "antlr-runtime-3.5.2.jar");
+        dep.add(LIBS, "lz4-java-1.8.0.jar");   // SVNKit needs net.jpountz.lz4 to read FSFS data
         return dep;
     }
 
