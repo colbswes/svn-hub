@@ -1246,7 +1246,25 @@ Do not use `width: 100%` on input controls (textbox-input, text-input, etc.). Th
 
 ## Known Issues & Solutions
 
-None currently documented.
+### Empty `application.ini` values must be quoted (`Key = ""`, not `Key =`)
+
+`MainServlet.getEnvironment` is backed by a `java.util.Hashtable`, which throws
+`NullPointerException` on a null value. `IniFile.parse` calls `unquote` on each value,
+and `unquote("")` returns **null** (an unquoted empty string), whereas `unquote("\"\"")`
+returns an empty string. So a bare `Key =` line yields a null that `MainServlet.readIniFile`
+tries to `Hashtable.put`, throwing an NPE that aborts `KissInit.init()` — after which the
+database is never configured and every service receives a null `Connection` (`db`).
+
+Symptom: at startup `* * * Error executing KissInit.groovy` with a bare
+`java.lang.NullPointerException`, and services fail with `Cannot invoke method ... on null
+object` (db is null) even though logins appear to "succeed" (the no-database fallback
+accepts any credentials).
+
+Fix: always give empty config keys an explicit empty-quoted value:
+```ini
+SvnServicePassword = ""    # correct
+# SvnServicePassword =     # WRONG: parses to null -> Hashtable NPE
+```
 
 ---
 

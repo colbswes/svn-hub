@@ -29,15 +29,27 @@
         <push-button id="users-delete" class="space" disabled>Delete</push-button>
     </div>
 
-    <popup id="users-edit-popup" height="200px" width="430px">
+    <popup id="users-edit-popup" height="370px" width="460px">
         <popup-title><text-label id="users-popup-title"></text-label></popup-title>
         <popup-body>
             <div class="grid-layout">
                 <span>User Name:</span>
-                <text-input id="users-user-name" style="width: 250px" maxlength="20" required></text-input>
+                <text-input id="users-user-name" style="width: 250px" maxlength="64" required></text-input>
 
-                <span>Password:</span>
-                <text-input id="users-password" style="width: 250px" maxlength="64" required></text-input>
+                <span>Full Name:</span>
+                <text-input id="users-full-name" style="width: 250px" maxlength="200"></text-input>
+
+                <span>Email:</span>
+                <text-input id="users-email" style="width: 250px" maxlength="200"></text-input>
+
+                <span>Login Password:</span>
+                <text-input id="users-password" style="width: 250px" maxlength="64" password></text-input>
+
+                <span>SVN Password:</span>
+                <text-input id="users-svn-password" style="width: 250px" maxlength="64"></text-input>
+
+                <span>Admin:</span>
+                <drop-down id="users-admin" style="width: 80px"></drop-down>
 
                 <span>Active:</span>
                 <drop-down id="users-active" style="width: 80px"></drop-down>

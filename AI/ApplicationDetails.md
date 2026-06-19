@@ -1,201 +1,93 @@
-# Application Details Template for KISS Framework
+# SvnHub — Application Details
 
-## Overview
-[Provide a brief description of your application's purpose and main functionality]
+A self-hosted, GitHub-like web service built on the Kiss framework, but backed by
+**Subversion instead of Git**. Two things distinguish it from existing SVN front-ends
+(ViewVC, WebSVN, Trac):
 
-**Example:**
-> This application manages [primary entities] and provides [key features] for [target users].
+1. **Rich per-user checkout/update statistics** — the flagship differentiator. It
+   tracks *who* checked out or updated *which* repo to *which revision*, how far behind
+   HEAD each developer's working copy is, read hotspots, stale/abandoned working copies,
+   and more — derived from the svnserve operational log.
+2. It **deliberately omits** GitHub's Agents, Actions (CI/CD), Projects (kanban), and
+   Security & Quality features.
 
-## Technical Requirements
+See `Plan.md` (repo root) for the original design. `AI/KnowledgeBase.md` is the Kiss
+framework reference — read it before changing framework code.
 
-### Framework Foundation
-- Built on the KISS framework (see `AI/KnowledgeBase.md` for detailed framework documentation)
-- Review `AI/KnowledgeBase.md` before starting development
-- Database schema should be defined in SQL files (e.g., `schema.sql`)
+## Locked-in architecture decisions
+- **Full management**: SvnHub creates repositories and manages SVN auth (writes svnserve
+  `passwd`/`authz`/`svnserve.conf`) through the web UI.
+- **SVNKit** (`libs/svnkit-1.10.11.jar` + sqljet, sequence-library, antlr-runtime,
+  lz4-java) for all repository browse/history/diff/admin/merge. Registered in
+  `Tasks.java` local deps; deployed via `copyTree(libs)`.
+- **PostgreSQL** (database `svnhub`, role `svnhub`). The dev DB password lives only in
+  `src/main/backend/application.ini`, which is **gitignored** (do not commit it).
+- First-version collaboration: README rendering, Issues, Merge requests. (Full-text
+  search, stars/watch, releases, wiki are deferred.)
 
-### Backend Implementation
-- **Preferred Language**: [Specify: Groovy, Java, or Lisp]
-- **Service Location**: `src/main/backend/services/`
-- **Naming Convention**: [e.g., EntityNameCrud.groovy, ServiceName.java]
-- **Shared Utilities**: Place in `src/main/precompiled/` for cross-service access
+## Two independent SVN touch-points
+- **SVNKit** is how SvnHub *itself* reads/administers/merges repos (over `file://`).
+- **svnserve `--log-file`** is how SvnHub learns what *other developers* did
+  (checkout/update/etc). SVNKit cannot see other clients' reads — only the server log
+  can. Both are required. (Note: merges committed by SvnHub go over `file://` and so do
+  *not* appear in the svnserve log.)
 
-### Frontend Implementation
-- **Screen Location**: `src/main/frontend/screens/`
-- **Structure**: Each screen in its own directory with `.html` and `.js` files
-- **Components**: Use KISS framework custom HTML tags (see AI/KnowledgeBase.md)
-- **Main Navigation**: Update `Framework/Framework.html` and `Framework/Framework.js`
+## Data model (`schema.sql`, PostgreSQL)
+Timestamps are `bigint` epoch-ms; day buckets are `integer` YYYYMMDD; flags are
+`char(1)` 'Y'/'N'.
+- Identity/repos: `users` (extended: full_name, email, is_admin, svn_password),
+  `repository`, `repository_access`, `svn_user_alias`.
+- Statistics: `access_event` (firehose, SHA-256 `event_hash` unique for idempotency),
+  `log_ingest_state` (per-inode cursor), `access_daily_rollup`, `working_copy_state`.
+- Browse cache: `commit_cache`, `commit_cache_path`.
+- Collaboration: `issue`, `issue_comment`, `merge_request`, `mr_comment`.
 
-## Database Schema
+## Backend (`src/main/backend/`)
+Precompiled helpers (`src/main/precompiled/com/svnhub/`, rebuild + restart on change):
+`SvnRepo` (SVNKit wrapper), `SvnAuth` (svnserve file builders), `SvnAuthManager`
+(regenerate auth from DB), `RepoAccess` (shared access checks — used by all services
+instead of cross-Groovy-service calls), `Json` (Java collections → Kiss JSON),
+`SvnLogParser` (svnserve log line parser, unit-tested in
+`src/test/core/com/svnhub/SvnLogParserTest.java`).
 
-### Table: [table_name]
-```sql
--- Provide CREATE TABLE statement or describe structure
--- Include primary keys, foreign keys, constraints, defaults
--- Note any special column types or rules
-```
+Groovy services (`src/main/backend/services/`, hot-reload): `RepositoryService`,
+`RepositoryAccessService`, `BrowseService`, `HistoryService`, `StatsService`,
+`IssueService`, `MergeRequestService`, plus the extended `Users`.
 
-**Example Structure:**
-- `id` (type) - Primary key, [generation strategy]
-- `name` (varchar) - [Description, constraints]
-- `created_date` (timestamp) - Default: CURRENT_TIMESTAMP
-- Foreign keys and relationships
+Cron (`src/main/backend/CronTasks/`, see `crontab`): `IngestSvnLogs` (every minute —
+incremental, idempotent log ingest), `RefreshRepoHead` (every 5 min — refresh HEAD +
+warm commit cache).
 
-[Repeat for each table]
+## Frontend (`src/main/frontend/screens/`, never `kiss/`)
+`Framework` (rebranded nav), `Repositories`, `Repository` (browse/README/commits),
+`Insights` (stats), `Issues`, `MergeRequests`, `Users`. Rich content (markdown, code,
+diffs) is rendered by libs in `frontend/lib/` (marked, highlight.js, diff2html; Chart.js
+is loaded but charts are currently drawn as HTML/CSS) and injected via the component
+API `text-label.setHTMLValue(...)` — **app screens never touch the DOM directly**.
 
-## Application Features
+## Configuration (`application.ini [main]`)
+`DatabaseType=PostgreSQL`, `DatabaseName/User/Password=svnhub`, plus SvnHub keys:
+`SvnReposRoot`, `SvnConfDir`, `SvnLogFile`, `SvnLogRotateGlob`, `SvnLogPathPrefix`,
+`SvnLogMaxLinesPerRun`, `SvnServiceUser`, `SvnServicePassword`. Read via
+`MainServlet.getEnvironment(key)`.
 
-### Feature/Module: [Name]
-**Description**: [What this feature does]
+> **Ini gotcha:** `MainServlet.environment` is a `Hashtable`, which rejects null values.
+> A bare empty value (`Key =`) parses to null (IniFile.unquote returns null for "") and
+> throws an NPE in `readIniFile`, aborting `KissInit` and leaving the app with **no DB**.
+> Always quote empty values: `Key = ""`.
 
-**Operations**:
-- **List/View**: [Display requirements, filters, sorting]
-- **Create/Add**: [Required fields, validation rules, defaults]
-- **Update/Edit**: [Editable fields, restrictions]
-- **Delete**: [Cascade rules, confirmation requirements]
+## Operational prerequisites (production)
+- Run svnserve with logging: `svnserve -d -r /home/repos --log-file /var/log/svnserve/svnserve.log`.
+- The app process needs filesystem write access to `SvnReposRoot` and `SvnConfDir`
+  (run as the `svn` user, or equivalent) so it can create repos and write auth files.
+- SVN passwords are stored in svnserve's `passwd` in the clear (an SVN limitation),
+  intentionally separate from the PBKDF2 login hash. Hashed SVN auth (SASL / Apache
+  htpasswd) is a future enhancement.
 
-**Business Rules**:
-- [List any special logic or validation]
-- [Relationships between entities]
-- [Calculated fields or derived data]
-
-[Repeat for each major feature]
-
-## UI/UX Guidelines
-
-### Design Principles
-- [Visual style preferences]
-- [Branding requirements]
-- [Responsive design needs]
-
-### Layout Standards
-- **Navigation**: [Menu structure, placement]
-- **Forms**: [Field organization, validation display]
-- **Grids**: [Column specifications, sorting, filtering]
-- **Popups**: [Sizing guidelines, when to use]
-
-### User Interaction Patterns
-- **CRUD Operations**: [Button placement, confirmation dialogs]
-- **Error Handling**: [How to display errors, validation messages]
-- **Success Feedback**: [Notifications, redirects]
-
-## Development Guidelines
-
-### Code Style Preferences
-- [Language-specific preferences, e.g., "No parentheses around single statements" for Groovy]
-- [Naming conventions for variables, methods, classes]
-- [Comment style and documentation requirements]
-
-### Database Best Practices
-- [How to handle auto-generated fields]
-- [Preferred data access patterns]
-- [Transaction boundaries]
-
-### Service Method Pattern
-```groovy
-// Example service method signature
-void methodName(JSONObject injson, JSONObject outjson, 
-                Connection db, ProcessServlet servlet) {
-    // Pattern for implementation
-}
-```
-
-### Frontend Development Pattern
-- [Component access pattern, e.g., using $$('id')]
-- [AJAX call patterns]
-- [Error handling in JavaScript]
-- [Grid refresh after operations]
-
-## Special Requirements
-
-### Authentication & Security
-- [User roles and permissions]
-- [Session management requirements]
-- [Data access restrictions]
-
-### Data Validation Rules
-- [Field-level validation]
-- [Business rule validation]
-- [Cross-field dependencies]
-
-### Integration Points
-- [External systems]
-- [API requirements]
-- [File imports/exports]
-
-## Navigation Structure
-```
-Application Name
-├── [Main Menu Item 1]
-│   ├── [Submenu if needed]
-│   └── [Submenu if needed]
-├── [Main Menu Item 2]
-├── [Main Menu Item 3]
-└── Logout
-```
-
-## Entity Relationships
-```
-[Describe or diagram the relationships between main entities]
-Example:
-Organization (1) ──── (*) Tenant
-Tenant (1) ──── (*) User
-```
-
-## Business Logic & Workflows
-
-### Workflow: [Name]
-1. [Step 1 description]
-2. [Step 2 description]
-3. [Validation points]
-4. [Success/failure paths]
-
-## Testing Requirements
-- [Unit test expectations]
-- [Integration test scenarios]
-- [User acceptance criteria]
-
-## Performance Considerations
-- [Expected data volumes]
-- [Concurrent user expectations]
-- [Response time requirements]
-- [Pagination needs for large datasets]
-
-## Future Enhancements (Optional)
-- [Planned features not in initial scope]
-- [Potential integrations]
-- [Scalability considerations]
-
-## Development Notes
-- [Any special instructions for developers]
-- [Known limitations or workarounds]
-- [Environment-specific configurations]
-
----
-
-## How to Use This Template
-
-1. **Replace all placeholders** in square brackets with your specific requirements
-2. **Remove sections** that don't apply to your application
-3. **Add sections** for any unique aspects of your application
-4. **Keep examples** that help clarify requirements
-5. **Update regularly** as requirements evolve
-
-## Tips for Working with Claude
-
-When using this template with Claude:
-1. Fill in as much detail as possible before starting
-2. Specify your preferences clearly (e.g., language choice, code style)
-3. Include example data or scenarios
-4. Reference existing code patterns you want to follow
-5. Be explicit about what should NOT be done
-
-## Related Documentation
-- `AI/KnowledgeBase.md` - Complete KISS framework reference
-- `AI/ApplicationDetails.md` - Your specific application implementation
-- Framework documentation in `/manual/` directory
-
----
-
-*Template Version: 1.0*
-*Created for: KISS Framework Applications*
-*Last Updated: 2026-02-04*
+## Build / run / verify
+- `./bld build` — compile (precompiled + core). `./bld start-backend` / `stop-backend`
+  — run tomcat backend (port 8080) non-interactively. `./bld develop` — interactive
+  frontend (8000) + backend.
+- `./bld unit-tests` then `java -jar work/KissUnitTest.jar --select-class=com.svnhub.SvnLogParserTest`.
+- Dev data lives under `dev-repos/` (gitignored). A demo repo `acme` and a test
+  svnserve on port 3691 were used during development.
