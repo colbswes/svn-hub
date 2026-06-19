@@ -28,9 +28,10 @@ CREATE TABLE users (
     CONSTRAINT users_admin_chk  CHECK (is_admin    = 'Y' OR is_admin    = 'N')
 );
 
--- Password is the PBKDF2 hash of 'password' (see org.kissweb.PasswordHash). Login name: kiss
+-- Default administrator.  user_password is the PBKDF2 hash of 'Password#123'
+-- (see org.kissweb.PasswordHash).  Login name: admin   (change this in production).
 INSERT INTO users (user_name, user_password, full_name, is_admin, user_active)
-VALUES ('kiss', 'pbkdf2$600000$XXxhRHyyeLvk3AfmOhTYhA$ZX/GcXFZJaj94VBbxu3zTVTwdVy7CxfxXfK/irpetUI', 'Kiss Admin', 'Y', 'Y');
+VALUES ('admin', 'pbkdf2$600000$81rEONHNxJ5PaC7KKM7VOw$SeZvjzTF4G0nqkxmaVgnh1fkmf4961/WsNSLhPlVAps', 'Administrator', 'Y', 'Y');
 
 -- ----------------------------------------------------------------------------
 -- repository

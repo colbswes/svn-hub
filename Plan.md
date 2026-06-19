@@ -188,7 +188,7 @@ SvnServicePassword    = ...
 
 ## Verification
 
-- **Build & run:** `./bld -v build` then `./bld develop`; open `http://localhost:8000`, log in (`kiss`/`password`), confirm the SvnHub nav loads.
+- **Build & run:** `./bld -v build` then `./bld develop`; open `http://localhost:8000`, log in (`admin`/`Password#123`), confirm the SvnHub nav loads.
 - **Repo lifecycle:** create a repo in the UI → confirm FSFS dir appears under `/home/repos`, `repository` row exists, and svnserve `authz`/`passwd` updated. From a shell, `svn checkout svn://localhost/<repo>` succeeds with the granted user and is denied for a non-granted user.
 - **Browsing:** import sample content; verify tree/file/README render and `svn log`/diff match the UI; commit a revision and confirm `commit_cache` warms.
 - **Statistics (core differentiator):** with `--log-file` enabled, run `svn co` then `svn up` as two different users; within ~1 min confirm `IngestSvnLogs` created `access_event` rows, `working_copy_state.last_synced_revision` advanced, and the Insights freshness leaderboard shows each user's revisions-behind. Re-run ingest manually and confirm **no duplicate** events (idempotency). Truncate/rotate the log and confirm the cursor recovers.
