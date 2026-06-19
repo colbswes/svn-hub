@@ -20,9 +20,16 @@ import org.tmatesoft.svn.core.internal.io.fs.FSRepositoryFactory;
 import org.tmatesoft.svn.core.io.ISVNEditor;
 import org.tmatesoft.svn.core.io.SVNRepository;
 import org.tmatesoft.svn.core.io.SVNRepositoryFactory;
+import org.tmatesoft.svn.core.SVNCommitInfo;
 import org.tmatesoft.svn.core.wc.SVNClientManager;
+import org.tmatesoft.svn.core.wc.SVNCommitClient;
 import org.tmatesoft.svn.core.wc.SVNDiffClient;
 import org.tmatesoft.svn.core.wc.SVNRevision;
+import org.tmatesoft.svn.core.wc.SVNRevisionRange;
+import org.tmatesoft.svn.core.wc.SVNUpdateClient;
+import org.tmatesoft.svn.core.wc.SVNWCUtil;
+import java.nio.file.Files;
+import java.util.Collections;
 
 /**
  * Thin, app-neutral wrapper around SVNKit for SvnHub.
@@ -208,7 +215,90 @@ public final class SvnRepo {
         }
     }
 
+    // -------------------------------------------------------- merge requests
+
+    /**
+     * Unified diff between two paths/revisions in the same repository — the
+     * preview of what merging {@code path2} into {@code path1} would bring.
+     *
+     * @param rev1/rev2 revisions, or -1 for HEAD
+     */
+    public static String diffPaths(String fsPath, String path1, long rev1, String path2, long rev2) throws SVNException {
+        SVNClientManager cm = SVNClientManager.newInstance();
+        try {
+            SVNDiffClient dc = cm.getDiffClient();
+            SVNURL u1 = childUrl(fsPath, path1);
+            SVNURL u2 = childUrl(fsPath, path2);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            dc.doDiff(u1, rev1 < 0 ? SVNRevision.HEAD : SVNRevision.create(rev1),
+                    u2, rev2 < 0 ? SVNRevision.HEAD : SVNRevision.create(rev2),
+                    SVNDepth.INFINITY, true, out);
+            return out.toString("UTF-8");
+        } catch (SVNException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            cm.dispose();
+        }
+    }
+
+    /**
+     * Merge all eligible revisions from {@code sourcePath} into {@code targetPath}
+     * and commit the result.  Performed in a throwaway working copy checked out
+     * over {@code file://} (no svnserve auth involved).
+     *
+     * @return the new revision number, or -1 if the merge produced no change
+     */
+    public static long merge(String fsPath, String sourcePath, String targetPath,
+                             String message, String author) throws SVNException {
+        SVNClientManager cm = SVNClientManager.newInstance(SVNWCUtil.createDefaultOptions(true), author, null);
+        File wc = null;
+        try {
+            wc = Files.createTempDirectory("svnhub-merge-").toFile();
+            SVNURL targetUrl = childUrl(fsPath, targetPath);
+            SVNURL sourceUrl = childUrl(fsPath, sourcePath);
+
+            SVNUpdateClient uc = cm.getUpdateClient();
+            uc.doCheckout(targetUrl, wc, SVNRevision.HEAD, SVNRevision.HEAD, SVNDepth.INFINITY, false);
+
+            SVNDiffClient dc = cm.getDiffClient();
+            SVNRevisionRange all = new SVNRevisionRange(SVNRevision.create(0), SVNRevision.HEAD);
+            dc.doMerge(sourceUrl, SVNRevision.HEAD, Collections.singletonList(all),
+                    wc, SVNDepth.INFINITY, true, false, false, false);
+
+            SVNCommitClient cc = cm.getCommitClient();
+            SVNCommitInfo info = cc.doCommit(new File[] {wc}, false, message, null, null,
+                    false, false, SVNDepth.INFINITY);
+            return info == null ? -1 : info.getNewRevision();
+        } catch (SVNException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            cm.dispose();
+            if (wc != null)
+                deleteTree(wc);
+        }
+    }
+
     // ----------------------------------------------------------------- helpers
+
+    private static SVNURL childUrl(String fsPath, String path) throws SVNException {
+        SVNURL url = fileUrl(fsPath);
+        String p = norm(path);
+        if (p.isEmpty())
+            return url;
+        return url.appendPath(p, false);
+    }
+
+    private static void deleteTree(File f) {
+        File[] kids = f.listFiles();
+        if (kids != null)
+            for (File k : kids)
+                deleteTree(k);
+        f.delete();
+    }
 
     private static SVNURL fileUrl(String fsPath) throws SVNException {
         return SVNURL.fromFile(new File(fsPath));

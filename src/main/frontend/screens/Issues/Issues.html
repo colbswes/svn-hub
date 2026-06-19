@@ -1,0 +1,52 @@
+<div>
+    <style>
+        .iss-bar { display: flex; align-items: center; gap: 12px; }
+        .iss-title { font-size: 18px; font-weight: 600; }
+        .cmt { border-top: 1px solid #eaecef; padding: 8px 0; }
+        .cmt .meta { color: #57606a; font-size: 12px; margin-bottom: 4px; }
+        .render { border: 1px solid #d0d7de; border-radius: 6px; padding: 10px; background: #fff; }
+    </style>
+
+    <div class="iss-bar">
+        <push-button id="iss-back">&larr; Repository</push-button>
+        <span class="iss-title">Issues — <text-label id="iss-repo"></text-label></span>
+        <drop-down id="iss-filter" style="width: 130px;"></drop-down>
+        <push-button id="iss-new">New Issue</push-button>
+    </div>
+
+    <div id="iss-grid" style="width: 100%; height: calc(100vh - 260px); margin-top: 12px;"></div>
+
+    <popup id="iss-new-popup" width="560px" height="420px">
+        <popup-title>New Issue</popup-title>
+        <popup-body>
+            <div style="margin: 8px;">
+                <div>Title:</div>
+                <text-input id="in-title" style="width: 460px" required></text-input>
+                <div style="margin-top: 8px;">Description (markdown):</div>
+                <textbox-input id="in-body" style="width: 460px; height: 200px;"></textbox-input>
+            </div>
+            <div style="margin: 12px 8px; text-align: right;">
+                <push-button id="in-ok">Create</push-button>
+                <push-button id="in-cancel" style="margin-left: 10px;">Cancel</push-button>
+            </div>
+        </popup-body>
+    </popup>
+
+    <popup id="iss-detail-popup" width="760px" height="640px">
+        <popup-title><text-label id="id-title"></text-label></popup-title>
+        <popup-body>
+            <div style="margin-bottom: 6px;"><text-label id="id-meta"></text-label></div>
+            <div class="render"><text-label id="id-body"></text-label></div>
+            <div style="font-weight: 600; margin: 12px 0 4px;">Comments</div>
+            <div class="render" style="max-height: 220px; overflow: auto;"><text-label id="id-comments"></text-label></div>
+            <div style="margin-top: 10px;">
+                <textbox-input id="id-newcomment" style="width: 660px; height: 70px;"></textbox-input>
+            </div>
+            <div style="margin-top: 10px; text-align: right;">
+                <push-button id="id-comment">Comment</push-button>
+                <push-button id="id-toggle" style="margin-left: 8px;">Close issue</push-button>
+                <push-button id="id-close" style="margin-left: 8px;">Done</push-button>
+            </div>
+        </popup-body>
+    </popup>
+</div>

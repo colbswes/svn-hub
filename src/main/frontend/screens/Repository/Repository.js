@@ -21,6 +21,14 @@
         Utils.cleanup();
         Utils.loadPage('screens/Repositories/Repositories', 'app-screen-area');
     });
+    $$('go-issues').onclick(() => {
+        Utils.cleanup();
+        Utils.loadPage('screens/Issues/Issues', 'app-screen-area');
+    });
+    $$('go-mrs').onclick(() => {
+        Utils.cleanup();
+        Utils.loadPage('screens/MergeRequests/MergeRequests', 'app-screen-area');
+    });
 
     // ---- helpers ----
     function join(base, name) {

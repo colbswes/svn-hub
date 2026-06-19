@@ -1,0 +1,57 @@
+<div>
+    <style>
+        .mr-bar { display: flex; align-items: center; gap: 12px; }
+        .mr-title { font-size: 18px; font-weight: 600; }
+        .cmt { border-top: 1px solid #eaecef; padding: 8px 0; }
+        .cmt .meta { color: #57606a; font-size: 12px; margin-bottom: 4px; }
+        .render { border: 1px solid #d0d7de; border-radius: 6px; padding: 10px; background: #fff; }
+    </style>
+
+    <div class="mr-bar">
+        <push-button id="mr-back">&larr; Repository</push-button>
+        <span class="mr-title">Merge Requests — <text-label id="mr-repo"></text-label></span>
+        <drop-down id="mr-filter" style="width: 130px;"></drop-down>
+        <push-button id="mr-new">New Merge Request</push-button>
+    </div>
+
+    <div id="mr-grid" style="width: 100%; height: calc(100vh - 260px); margin-top: 12px;"></div>
+
+    <popup id="mr-new-popup" width="600px" height="440px">
+        <popup-title>New Merge Request</popup-title>
+        <popup-body>
+            <div style="margin: 8px;">
+                <div>Source path (e.g. /branches/feature):</div>
+                <text-input id="mn-source" style="width: 460px" required></text-input>
+                <div style="margin-top: 8px;">Target path (e.g. /trunk):</div>
+                <text-input id="mn-target" style="width: 460px" required></text-input>
+                <div style="margin-top: 8px;">Title:</div>
+                <text-input id="mn-title" style="width: 460px"></text-input>
+                <div style="margin-top: 8px;">Description:</div>
+                <textbox-input id="mn-body" style="width: 460px; height: 110px;"></textbox-input>
+            </div>
+            <div style="margin: 12px 8px; text-align: right;">
+                <push-button id="mn-ok">Create</push-button>
+                <push-button id="mn-cancel" style="margin-left: 10px;">Cancel</push-button>
+            </div>
+        </popup-body>
+    </popup>
+
+    <popup id="mr-detail-popup" width="1000px" height="720px">
+        <popup-title><text-label id="md-title"></text-label></popup-title>
+        <popup-body>
+            <div style="margin-bottom: 6px;"><text-label id="md-meta"></text-label></div>
+            <div class="render" style="max-height: 360px; overflow: auto;"><text-label id="md-diff"></text-label></div>
+            <div style="font-weight: 600; margin: 12px 0 4px;">Comments</div>
+            <div class="render" style="max-height: 140px; overflow: auto;"><text-label id="md-comments"></text-label></div>
+            <div style="margin-top: 8px;">
+                <textbox-input id="md-newcomment" style="width: 900px; height: 56px;"></textbox-input>
+            </div>
+            <div style="margin-top: 10px; text-align: right;">
+                <push-button id="md-comment">Comment</push-button>
+                <push-button id="md-merge" style="margin-left: 8px;">Approve &amp; Merge</push-button>
+                <push-button id="md-closereq" style="margin-left: 8px;">Close</push-button>
+                <push-button id="md-done" style="margin-left: 8px;">Done</push-button>
+            </div>
+        </popup-body>
+    </popup>
+</div>
