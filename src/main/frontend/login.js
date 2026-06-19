@@ -32,6 +32,10 @@
 
     $$('login').onclick(login);
 
+    $$('why-button').onclick(function () {
+        Utils.loadPage('why');
+    });
+
     $$('to-register').onclick(function () {
         Utils.loadPage('register');
     });
