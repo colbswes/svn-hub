@@ -1,20 +1,19 @@
 <div class="why-page">
     <style>
-        .why-page { display: flex; justify-content: center; padding: 24px 16px 48px; }
+        .why-page { display: flex; justify-content: center; padding: 64px 16px 48px; }
         .why-wrap { max-width: 820px; width: 100%; }
-        .why-top { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+        .why-float { position: fixed; top: 16px; left: 16px; z-index: 100; }
         .why-wrap h1 { margin: 0; font-size: 30px; }
         .why-wrap h2 { margin: 28px 0 8px; font-size: 21px; color: #24292f; border-bottom: 1px solid #eaecef; padding-bottom: 4px; }
         .why-wrap p { line-height: 1.65; color: #24292f; margin: 10px 0; font-size: 16px; }
         .why-lede p { font-size: 17px; }
-        .why-actions { margin-top: 30px; display: flex; align-items: center; gap: 16px; }
     </style>
 
-    <div class="why-wrap">
-        <div class="why-top">
-            <push-button id="why-back">&larr; Back to sign in</push-button>
-        </div>
+    <div class="why-float">
+        <push-button id="why-back">&larr; Back to sign in</push-button>
+    </div>
 
+    <div class="why-wrap">
         <h1>Why This Service Exists</h1>
 
         <div class="why-lede">
@@ -99,9 +98,5 @@
             more valuable in others.</p>
         <p>This service is for the projects and teams that want a clear, practical, free, and independent
             alternative.</p>
-
-        <div class="why-actions">
-            <push-button id="why-back-2">&larr; Back to sign in</push-button>
-        </div>
     </div>
 </div>

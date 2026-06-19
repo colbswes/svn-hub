@@ -5,11 +5,8 @@
 
 (function () {
 
-    function backToLogin() {
+    $$('why-back').onclick(function () {
         Utils.loadPage('login');
-    }
-
-    $$('why-back').onclick(backToLogin);
-    $$('why-back-2').onclick(backToLogin);
+    });
 
 })();
