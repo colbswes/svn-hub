@@ -30,8 +30,10 @@ framework reference — read it before changing framework code.
   **self-register** (GitHub-style, no email verification) via the public `Register` service
   (allow-listed in `KissInit.groovy`); self-registered users are regular. Only an **admin**
   can promote a user or manage accounts — the `Users` service is admin-gated and its nav
-  item is hidden for regular users. Registration captures a single password used for both
-  web login (PBKDF2 hash) and `svn` checkouts (clear text in svnserve's passwd).
+  item is hidden for regular users. For a self-registered user the **email address is the
+  username** (login identifier); registration captures a single password used for both web
+  login (PBKDF2 hash) and `svn` checkouts (clear text in svnserve's passwd). (The admin
+  Users screen can still set username and email independently, e.g. for the bootstrap admin.)
 - **Ownership & visibility:** each `repository` has an `owner_id` (creator) and a
   `visibility` of `public` or `private`. "My Repositories" (`getRepositories`) shows repos
   the user owns or is granted; **Explore** (`searchRepositories`) finds *other* repos they

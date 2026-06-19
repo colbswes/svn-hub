@@ -6,7 +6,7 @@
 (function () {
 
     async function login() {
-        if ($$('username').isError('Username'))
+        if ($$('username').isError('Email'))
             return;
         if ($$('password').isError('Password'))
             return;

@@ -4,14 +4,11 @@
         <div style="margin-bottom: 18px; color: #57606a;">Create your account</div>
 
         <form onsubmit="return false;" autocomplete="on">
-            <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px;">Username:</div>
-            <text-input id="username" required autocomplete="username" maxlength="64"></text-input>
+            <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px;">Email:</div>
+            <text-input id="email" required autocomplete="username" maxlength="255"></text-input>
             <br>
             <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px; margin-top: 10px;">Full Name:</div>
             <text-input id="full-name" style="margin-top: 10px;" maxlength="200"></text-input>
-            <br>
-            <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px; margin-top: 10px;">Email (optional):</div>
-            <text-input id="email" style="margin-top: 10px;" maxlength="200"></text-input>
             <br>
             <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px; margin-top: 10px;">Password:</div>
             <text-input id="password" style="margin-top: 10px;" required password autocomplete="new-password"></text-input>
@@ -27,7 +24,8 @@
             <push-button id="to-login">Sign in</push-button>
         </div>
         <div style="margin-top: 10px; color: #57606a; font-size: 12px; max-width: 420px;">
-            Your password is used both for the web UI and for <code>svn</code> checkouts.
+            Your email address is your username. Your password is used both for the web UI and for
+            <code>svn</code> checkouts.
         </div>
     </div>
 </div>

@@ -16,11 +16,11 @@
 -- ----------------------------------------------------------------------------
 CREATE TABLE users (
     user_id        serial                 NOT NULL PRIMARY KEY,
-    user_name      character varying(64)  NOT NULL UNIQUE,
+    user_name      character varying(255) NOT NULL UNIQUE,   -- for self-registered users this equals their email
     user_password  character varying(255) NOT NULL,           -- PBKDF2 login hash (org.kissweb.PasswordHash)
     svn_password   character varying(255),                    -- SvnHub-managed SVN password (written to svnserve passwd)
     full_name      character varying(200),
-    email          character varying(200),
+    email          character varying(255),
     is_admin       character(1)           NOT NULL DEFAULT 'N',
     user_active    character(1)           NOT NULL DEFAULT 'Y',
     created_ts     bigint,
@@ -77,7 +77,7 @@ CREATE INDEX repaccess_user_idx ON repository_access (user_id);
 -- ----------------------------------------------------------------------------
 CREATE TABLE svn_user_alias (
     alias_id       serial                 NOT NULL PRIMARY KEY,
-    raw_user_name  character varying(100) NOT NULL UNIQUE,
+    raw_user_name  character varying(255) NOT NULL UNIQUE,
     user_id        integer                REFERENCES users(user_id),  -- NULL until reconciled
     created_ts     bigint                 NOT NULL
 );

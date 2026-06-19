@@ -6,30 +6,30 @@
 (function () {
 
     async function doRegister() {
-        if ($$('username').isError('Username'))
+        if ($$('email').isError('Email'))
             return;
         if ($$('password').isError('Password'))
             return;
         if ($$('password2').isError('Confirm'))
             return;
-        const username = $$('username').getValue().toLowerCase();
+        const email = $$('email').getValue().trim().toLowerCase();
         const password = $$('password').getValue();
         if (password !== $$('password2').getValue()) {
             Utils.showMessage('Error', 'The passwords do not match.');
             return;
         }
 
+        // The email is the username.
         const res = await Server.call('services/Register', 'register', {
-            username: username,
+            email: email,
             password: password,
-            fullName: $$('full-name').getValue(),
-            email: $$('email').getValue()
+            fullName: $$('full-name').getValue()
         });
         if (!res._Success)
             return;   // the framework already showed the error
 
         // GitHub-style: log the new user straight in.
-        const login = await Server.call('', 'Login', {username: username, password: password});
+        const login = await Server.call('', 'Login', {username: email, password: password});
         if (login._Success) {
             Server.setUUID(login.uuid);
             Utils.saveData('isAdmin', login.isAdmin === true);
@@ -49,6 +49,6 @@
     $$('to-login').onclick(function () {
         Utils.loadPage('login');
     });
-    $$('username').focus();
+    $$('email').focus();
 
 })();

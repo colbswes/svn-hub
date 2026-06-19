@@ -25,22 +25,22 @@ class Register {
         if (db == null)
             throw new UserException("Registration is unavailable (no database configured).")
 
-        String username = injson.getString("username", "")
-        if (username != null)
-            username = username.trim().toLowerCase()
+        String email = injson.getString("email", "")
+        if (email != null)
+            email = email.trim().toLowerCase()
         String password = injson.getString("password", "")
         String fullName = injson.getString("fullName", "")
-        String email = injson.getString("email", "")
 
-        if (!username || !(username ==~ /[a-z0-9][a-z0-9_.-]{0,63}/))
-            throw new UserException("Invalid username. Use 1-64 characters (letters, digits, dot, dash, underscore) and do not start with a symbol.")
+        // The email address is also the username (the login identifier).
+        if (!email || !(email ==~ /[^@\s]+@[^@\s]+\.[^@\s]+/))
+            throw new UserException("Please enter a valid email address.")
         if (!password || password.length() < 6)
             throw new UserException("Password must be at least 6 characters.")
-        if (db.exists("select 1 from users where lower(user_name) = ?", username))
-            throw new UserException("That username is already taken.")
+        if (db.exists("select 1 from users where lower(user_name) = ?", email))
+            throw new UserException("An account with that email already exists.")
 
         Record rec = db.newRecord("users")
-        rec.set("user_name", username)
+        rec.set("user_name", email)
         rec.set("user_password", PasswordHash.hash(password))
         rec.set("svn_password", password)        // same credential, for svn client auth
         rec.set("full_name", fullName)
@@ -55,6 +55,6 @@ class Register {
         if (confDir)
             SvnAuthManager.regeneratePasswd(db, confDir + "/passwd")
 
-        outjson.put("username", username)
+        outjson.put("username", email)
     }
 }
