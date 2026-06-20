@@ -3,7 +3,9 @@ package com.svnhub;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.OutputStream;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +17,7 @@ import org.tmatesoft.svn.core.SVNLogEntry;
 import org.tmatesoft.svn.core.SVNLogEntryPath;
 import org.tmatesoft.svn.core.SVNNodeKind;
 import org.tmatesoft.svn.core.SVNProperties;
+import org.tmatesoft.svn.core.SVNPropertyValue;
 import org.tmatesoft.svn.core.SVNURL;
 import org.tmatesoft.svn.core.internal.io.fs.FSRepositoryFactory;
 import org.tmatesoft.svn.core.io.ISVNEditor;
@@ -140,6 +143,43 @@ public final class SvnRepo {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         repo.getFile(norm(path), rev, null, out);
         return out.toByteArray();
+    }
+
+    /** Epoch-ms of a revision's {@code svn:date} (revision 0 = repo creation), or -1 if unavailable. */
+    public static long getRevisionDate(String fsPath, long revision) throws SVNException {
+        SVNRepository repo = open(fsPath);
+        long rev = resolve(repo, revision);
+        SVNPropertyValue v = repo.getRevisionPropertyValue(rev, "svn:date");
+        String d = v == null ? null : SVNPropertyValue.getPropertyAsString(v);
+        if (d == null)
+            return -1;
+        try {
+            return Instant.parse(d).toEpochMilli();
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** Count file nodes (not directories) in the entire tree at a revision (-1 = HEAD). */
+    public static long countFiles(String fsPath, long revision) throws SVNException {
+        SVNRepository repo = open(fsPath);
+        long rev = resolve(repo, revision);
+        return countFilesRec(repo, "", rev);
+    }
+
+    private static long countFilesRec(SVNRepository repo, String path, long rev) throws SVNException {
+        long count = 0;
+        List<SVNDirEntry> entries = new ArrayList<>();
+        repo.getDir(path, rev, (SVNProperties) null, (Collection) entries);
+        for (SVNDirEntry e : entries) {
+            if (e.getKind() == SVNNodeKind.DIR) {
+                String child = path.isEmpty() ? e.getName() : path + "/" + e.getName();
+                count += countFilesRec(repo, child, rev);
+            } else if (e.getKind() == SVNNodeKind.FILE) {
+                count++;
+            }
+        }
+        return count;
     }
 
     // ---------------------------------------------------------------- history
