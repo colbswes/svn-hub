@@ -28,20 +28,18 @@
         <popup-body>
             <div class="grid-layout" style="margin: 10px;">
                 <div style="margin-bottom: 8px;">
-                    <div>Key (URL slug):</div>
+                    <div>Repository Name:</div>
                     <text-input id="nr-key" style="width: 280px" required></text-input>
-                </div>
-                <div style="margin-bottom: 8px;">
-                    <div>Name:</div>
-                    <text-input id="nr-name" style="width: 280px"></text-input>
+                    <div style="font-size: 11px; color: #57606a;">Letters, digits, dash or underscore &mdash; no spaces.</div>
                 </div>
                 <div style="margin-bottom: 8px;">
                     <div>Description:</div>
                     <text-input id="nr-desc" style="width: 360px"></text-input>
                 </div>
                 <div style="margin-bottom: 8px;">
-                    Visibility:
-                    <drop-down id="nr-visibility" style="width: 200px;"></drop-down>
+                    <div>Visibility:</div>
+                    <radio-button group="nr-vis" id="nr-vis-private" value="private">Private</radio-button>
+                    <radio-button group="nr-vis" id="nr-vis-public" value="public" style="margin-left: 14px;">Public (anyone can checkout)</radio-button>
                 </div>
                 <div style="margin-bottom: 8px;">
                     <check-box id="nr-layout">Create standard layout (trunk, branches, tags)</check-box>

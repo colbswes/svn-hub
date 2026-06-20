@@ -102,7 +102,7 @@ class RepositoryService {
             visibility = "private"
 
         if (!repoKey || !(repoKey ==~ /[A-Za-z0-9_-]{1,100}/))
-            throw new UserException("Invalid repository key. Use 1-100 letters, digits, dash or underscore.")
+            throw new UserException("Invalid repository name. Use 1-100 letters, digits, dash or underscore (no spaces).")
         if (!name)
             name = repoKey
         if (db.exists("select 1 from repository where repo_key = ?", repoKey))

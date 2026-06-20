@@ -75,24 +75,19 @@
     // ---- create repository ----
     $$('repo-new').onclick(() => {
         $$('nr-key').clear();
-        $$('nr-name').clear();
         $$('nr-desc').clear();
-        $$('nr-visibility').clear();
-        $$('nr-visibility').add('private', 'Private');
-        $$('nr-visibility').add('public', 'Public (anyone can checkout)');
-        $$('nr-visibility').setValue('private');
+        $$('nr-vis').setValue('private');
         $$('nr-layout').setValue(true);
         Utils.popup_open('new-repo-popup', 'nr-key');
     });
     $$('nr-cancel').onclick(() => Utils.popup_close());
     $$('nr-ok').onclick(async () => {
-        if ($$('nr-key').isError('Key'))
+        if ($$('nr-key').isError('Repository Name'))
             return;
         const data = {
             repoKey: $$('nr-key').getValue().trim(),
-            name: $$('nr-name').getValue().trim(),
             description: $$('nr-desc').getValue().trim(),
-            visibility: $$('nr-visibility').getValue(),
+            visibility: $$('nr-vis').getValue(),
             standardLayout: $$('nr-layout').getValue()
         };
         const res = await Server.call(WS_REPO, 'createRepository', data);
