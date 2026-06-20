@@ -16,6 +16,15 @@
             return;
         const email = $$('email').getValue().trim().toLowerCase();
         const handle = $$('handle').getValue().trim().toLowerCase();
+        // Same rule the server enforces: letters/digits/dash/underscore, no spaces,
+        // starting with a letter or digit, 1-64 characters.
+        if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(handle)) {
+            await Utils.showMessage('Invalid username',
+                'Your username may contain only letters, digits, dash and underscore (no spaces), ' +
+                'must start with a letter or digit, and be at most 64 characters.');
+            $$('handle').focus();
+            return;
+        }
         const password = $$('password').getValue();
         if (password !== $$('password2').getValue()) {
             Utils.showMessage('Error', 'The passwords do not match.');
