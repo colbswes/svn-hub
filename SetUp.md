@@ -13,8 +13,8 @@ In this guide:
 
 | Thing | Value used below (change to taste) |
 |---|---|
-| App / code directory | `/opt/svnhub` (also the service user's home) |
-| Service user | `svnhub` |
+| App / code directory | `/opt/svnhub` |
+| Service user | `svnhub` (home `/home/svnhub`) |
 | SVN repositories root | `/srv/svn/repos` |
 | SVN auth config dir | `/srv/svn/repos/.svnhub-conf` |
 | svnserve log | `/srv/svn/svnserve.log` |
@@ -45,7 +45,9 @@ In this guide:
 sudo apt update && sudo apt -y upgrade
 
 # Create the unprivileged service user that owns the code and runs both daemons.
-sudo useradd --system --create-home --home-dir /opt/svnhub --shell /bin/bash svnhub
+# Its home (/home/svnhub) is kept separate from the app directory (/opt/svnhub,
+# created in Step 4) so the clone there lands in an empty directory.
+sudo useradd --system --create-home --home-dir /home/svnhub --shell /bin/bash svnhub
 
 # Host firewall (in addition to your cloud security group)
 sudo apt -y install ufw
@@ -69,9 +71,10 @@ ghostscript and more X11 libraries):
 
 ```bash
 sudo apt -y install openjdk-21-jdk-headless subversion postgresql git nginx \
-                    certbot python3-certbot-nginx
+                    certbot python3-certbot-nginx ghostscript
 
-# groff (text/table PDF reports) — --no-install-recommends avoids ghostscript + X11.
+# groff (text/table PDF reports) — --no-install-recommends keeps it from pulling
+# extra tools we don't need (ghostscript is installed explicitly above).
 sudo apt -y install --no-install-recommends groff
 
 java -version      # expect OpenJDK 21
@@ -83,26 +86,19 @@ svnserve --version # confirms Subversion is present
   and run SvnHub.
 - **subversion** — provides `svnserve`, `svn`, `svnadmin`.
 - **postgresql**, **nginx**, **certbot** — database, reverse proxy, TLS.
-- **groff** — text/table PDF reports (optional). SvnHub uses only the `-Tpdf`
-  driver; **ghostscript** is needed *only* if a report embeds images — add it
-  later with `sudo apt install ghostscript` if you ever hit that.
+- **groff** — text/table PDF reports (uses the `-Tpdf` driver).
+- **ghostscript** — for PDF reports that embed images (Groff's `ps2pdf` path). It
+  pulls two X11 *client* libraries (`libx11-6`, `libxt6t64`) via `libgs10` — that is
+  unavoidable for any PostScript→PDF tool, but it is not an X server or desktop.
 
-> **Why not the full `openjdk-21-jdk` / plain `groff`?** The full JDK depends on
-> the non-headless JRE, whose `java.desktop` (AWT/Java2D) links against X11
-> **client libraries** (`libX11`, `libXext`, `libXi`, `libXrender`, `libXtst`, …),
-> so `apt` installs them even though the server has no display. Plain `groff`'s
-> *Recommends* pull `ghostscript`, which is built with an X11 device and adds more.
-> These are just shared libraries (no X server or desktop), but they are
-> unnecessary here — the headless JDK and `--no-install-recommends groff` keep
-> them off.
->
-> If you already installed the full JDK, switch and clean up:
-> ```bash
-> sudo apt -y install openjdk-21-jdk-headless
-> sudo apt -y remove openjdk-21-jdk          # drop the non-headless JDK
-> sudo apt -y remove --purge ghostscript     # if you don't need image-in-PDF reports
-> sudo apt -y autoremove                      # removes the now-orphaned X11 libs
-> ```
+> **Why the headless JDK?** The full `openjdk-21-jdk` depends on the non-headless
+> JRE, whose `java.desktop` (AWT/Java2D) links against a broad set of X11 **client
+> libraries** (`libX11`, `libXext`, `libXi`, `libXrender`, `libXtst`, …) — pulled in
+> even though the server has no display. The headless JDK omits all of that. (The
+> `ghostscript` installed above still brings the two small client libs `libx11-6` /
+> `libxt6t64` via `libgs10` — unavoidable for any PostScript→PDF tool, and client
+> libraries only, not an X server or desktop. `--no-install-recommends groff` keeps
+> groff from pulling further extras.)
 
 ---
 
@@ -133,8 +129,11 @@ is present in `/etc/postgresql/*/main/pg_hba.conf`, then
 ## 4. Get the code
 
 ```bash
+# /opt is root-owned, so create the app directory and hand it to svnhub first,
+# then clone into the now-empty directory.
+sudo mkdir -p /opt/svnhub
+sudo chown svnhub:svnhub /opt/svnhub
 sudo -u svnhub git clone https://github.com/blakemcbride/svn-hub /opt/svnhub
-sudo chown -R svnhub:svnhub /opt/svnhub
 ```
 
 (If you copy the tree up manually instead of cloning, make sure
@@ -236,24 +235,6 @@ app there.
 cd /opt/svnhub
 sudo -u svnhub ./bld build
 ```
-
-> **First-build bootstrap (expected once).** On a brand-new checkout the very
-> first `./bld build` fails while compiling the unit tests, because `bld`
-> compiles `src/test/core` *before* `src/main/precompiled` (the tests reference
-> precompiled classes that don't exist yet). When that happens, run the one-time
-> bootstrap and build again:
->
-> ```bash
-> sudo -u svnhub bash -lc '
->   javac -proc:none \
->     -cp "work/exploded/WEB-INF/classes:work/exploded/WEB-INF/lib/*" \
->     -d work/exploded/WEB-INF/classes \
->     $(find src/main/precompiled/com -name "*.java")
-> '
-> sudo -u svnhub ./bld build      # now succeeds
-> ```
->
-> (See `AutoUpdate.md` for the why. This dance is only needed on a clean build.)
 
 A successful build leaves the deployable app under `/opt/svnhub/tomcat/webapps/ROOT`.
 
@@ -432,7 +413,7 @@ sudo systemctl stop svnhub
 cd /opt/svnhub
 sudo -u svnhub git pull
 sudo -u svnhub ./bld clean      # REQUIRED when the schema version changes (see note)
-sudo -u svnhub ./bld build      # if a clean build fails on tests, do the Step-8 bootstrap once
+sudo -u svnhub ./bld build
 sudo systemctl start svnhub
 ```
 
@@ -476,7 +457,6 @@ sudo tar czf /var/backups/svnhub-repos-$(date +%F).tar.gz -C /srv svn
 | Symptom | Likely cause / fix |
 |---|---|
 | Startup fails; services get a null DB connection | A bare `Key =` in `application.ini`. Quote empties: `Key = ""`. |
-| `./bld build` fails on first run with "cannot find symbol" in a test | Expected on a clean build — run the Step-8 bootstrap, then build again. |
 | A new schema migration didn't apply after an upgrade | Stale compile-time version constant — `./bld clean` then `./bld build`, restart. Verify `SELECT max(version) FROM db_version`. |
 | Login says "Invalid login." for everyone after a deploy | Schema migration failed (fail-closed). Check `catalina.out` for the `SCHEMA MIGRATION FAILED` banner; fix and restart. |
 | Web UI loads but `svn checkout` fails | `svnserve` not running, port 3690 blocked (cloud SG/ufw), or `SvnBaseUrl` wrong. |

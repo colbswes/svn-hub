@@ -134,8 +134,7 @@ v1 -> v2   DefaultBranchUpgrader   (set default_branch='trunk' where NULL and th
 > recompiles changed `.java`, so after editing only `MigrationRegistry.java` the
 > stale `SchemaMigrator.class` still has the **old** target inlined → it sees
 > `target == current`, logs "schema current", and silently skips the new
-> migration. Fix: `./bld clean` then `./bld build` (then bootstrap-compile per
-> the note below if the clean build's test phase fails). Also force Tomcat to
+> migration. Fix: `./bld clean` then `./bld build`. Also force Tomcat to
 > re-explode the fresh WAR (`rm -rf tomcat/webapps/ROOT tomcat/work` before
 > start) — a stale exploded `ROOT/` newer than `ROOT.war` is not re-expanded.
 > (Migrator INFO logs are suppressed by the root log level, so the DB
@@ -152,12 +151,10 @@ v1 -> v2   DefaultBranchUpgrader   (set default_branch='trunk' where NULL and th
 > `CURRENT_RECORD_VERSION` ↔ upgrader registry must change in the same commit.
 > Both `validate()` methods fail fast at startup; `RegistryTest` checks them.
 
-> **Build ordering note:** the `bld` build compiles `src/test/core` *before*
-> `src/main/precompiled`, so the first build after adding a precompiled class a
-> test references needs the precompiled classes present. If a clean build fails
-> with "cannot find symbol" for a new migrate class, bootstrap-compile it once:
-> `javac -proc:none -cp "work/exploded/WEB-INF/classes:work/exploded/WEB-INF/lib/*" -d work/exploded/WEB-INF/classes src/main/precompiled/com/svnhub/migrate/*.java`
-> then re-run `./bld build`.
+> **Build ordering:** `buildSystem()` and `jar(true)` in `Tasks.java` compile
+> `src/main/precompiled` *before* `src/test/core`, so tests that reference
+> precompiled classes (e.g. `RegistryTest`, `SvnLogParserTest`) build cleanly.
+> `./bld clean && ./bld build` works with no manual bootstrap step.
 
 ---
 
