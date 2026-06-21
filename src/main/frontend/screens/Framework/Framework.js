@@ -60,7 +60,11 @@
             });
             if (res._Success) {
                 Utils.popup_close();
-                Utils.showMessage('Password changed', 'Your password has been updated. Use it for both the web UI and svn.');
+                // The session still holds the old credential, so sign out and have
+                // them sign back in with the new password (also used for svn).
+                await Utils.showMessage('Password changed',
+                    'Your password has been updated (web UI and svn). Please sign in again with your new password.');
+                Server.logout();
             }
         });
         $$('cpw-cancel').onclick(() => Utils.popup_close());

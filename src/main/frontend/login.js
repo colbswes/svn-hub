@@ -22,7 +22,12 @@
             Utils.saveData('handle', res.handle);
             Utils.saveData('email', res.email);
             Utils.saveData('emailVerified', res.emailVerified === true);
-            if (res.emailVerified === true) {
+            if (res.usedResetCode === true) {
+                // Signed in with an emailed reset code → must set a new password.
+                // Carry the code so the (authenticated) change-password can use it.
+                Utils.saveData('resetCredential', data.password);
+                Utils.loadPage('setpw');
+            } else if (res.emailVerified === true) {
                 DOMUtils.preventNavigation(true, function() {
                     Utils.yesNo('Confirm', 'Are you sure you want to logout?', function() {
                         Server.logout();

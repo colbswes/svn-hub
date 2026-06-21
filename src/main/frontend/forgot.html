@@ -1,35 +1,26 @@
 <div class="center">
-    <div style="display: inline-block; text-align: center; max-width: 480px;">
+    <div style="display: inline-block; text-align: center; max-width: 500px;">
         <h1>Svn-Hub</h1>
-        <div style="margin-bottom: 14px; color: #57606a;">Reset your password</div>
+        <div style="margin-bottom: 14px; color: #57606a;">Forgot your password?</div>
 
         <p style="color:#24292f; line-height:1.55; margin: 0 0 16px;">
-            Enter your email address and we'll send you a 6-digit code. Then enter
-            the code and choose a new password.
+            Enter your email address and we'll send you a 6-digit code. For the next
+            30 minutes you can sign in with that code in place of your password &mdash;
+            then set a new one. Your existing password keeps working the whole time.
         </p>
 
         <form onsubmit="return false;" autocomplete="off">
-            <div style="display:inline-block; width:130px; text-align:right; margin-right:10px;">Email:</div>
+            <div style="display:inline-block; width:80px; text-align:right; margin-right:10px;">Email:</div>
             <text-input id="email" required maxlength="255" autocomplete="username"></text-input>
-            <push-button id="send-code" style="margin-left:10px;">Send code</push-button>
-
-            <div style="min-height:20px; margin:12px 0; color:#1a7f37; font-size:13px;">
-                <text-label id="sent-msg"></text-label>
-            </div>
-
-            <div style="display:inline-block; width:130px; text-align:right; margin-right:10px; margin-top:10px;">Code:</div>
-            <text-input id="code" style="margin-top:10px;" maxlength="6" autocomplete="one-time-code"></text-input>
             <br>
-            <div style="display:inline-block; width:130px; text-align:right; margin-right:10px; margin-top:10px;">New password:</div>
-            <text-input id="password" style="margin-top:10px;" password autocomplete="new-password"></text-input>
-            <br>
-            <div style="display:inline-block; width:130px; text-align:right; margin-right:10px; margin-top:10px;">Confirm:</div>
-            <text-input id="password2" style="margin-top:10px;" password autocomplete="new-password"></text-input>
-            <br>
-            <push-button id="reset" style="margin-top:20px;">Reset password</push-button>
+            <push-button id="send-code" style="margin-top:20px;">Send code</push-button>
         </form>
 
-        <div style="margin-top:22px;">
+        <div style="min-height:22px; margin:16px 0; color:#1a7f37; font-size:14px;">
+            <text-label id="sent-msg"></text-label>
+        </div>
+
+        <div style="margin-top:8px;">
             <push-button id="to-login">Back to sign in</push-button>
         </div>
     </div>

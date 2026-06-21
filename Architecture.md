@@ -140,8 +140,8 @@ is enforced by the framework; the current user is `servlet.getUserData().getUser
 | Service | Responsibility |
 |---|---|
 | `Register` | Public self-registration (no-auth; allow-listed in `KissInit.groovy`). Validates email + handle, creates an **unverified** regular user, and emails a 6-digit verification code (Postmark). |
-| `AccountService` | Authenticated self-service: `verifyEmail`/`resendVerification` (confirm the email with the emailed code), `changePassword` (verifies current, updates the PBKDF2 hash + `svn_password`, regenerates svnserve passwd), `status`. |
-| `PasswordResetService` | Forgotten-password flow (no-auth; allow-listed): `requestReset` (emails a code; never reveals whether the account exists) and `resetPassword` (validates the code, sets a new password). |
+| `AccountService` | Authenticated self-service: `verifyEmail`/`resendVerification` (confirm the email), `changePassword` (current credential may be the existing password **or** a valid reset code; updates the PBKDF2 hash + `svn_password`, clears reset codes, regenerates svnserve passwd), `status`. |
+| `PasswordResetService` | `requestReset` only (no-auth; allow-listed): emails a 6-digit code that works as a **temporary login** for 30 min; never changes the stored password and never reveals whether the account exists. (Setting the new password is the authenticated `changePassword`.) |
 | `Users` | Admin-only account management (list/add/update/delete), including handle, admin flag, and SVN password; regenerates svnserve passwd. |
 | `RepositoryService` | Create repos (SVNKit) under the owner's handle namespace; list owned/granted (`getRepositories`); keyword Explore (`searchRepositories`); update; admin disk `scanRepositories`. |
 | `DiscoverService` | GitHub-style discovery: `searchUsers` (people directory — handle/name/public-repo-count, no emails), `searchRepos` (public repos by name/description/key), and `getProfile` (a user's public repos; private ones too if the viewer is the owner or an admin). All searches are case-insensitive substring matches and paginated (`page`/`pageSize` in, `total` out). |
@@ -168,9 +168,10 @@ don't depend on cross-Groovy-service static calls.
 - `Mailer` — sends transactional email via Postmark's REST API (`RestClient` POST to
   `https://api.postmarkapp.com/email`, `X-Postmark-Server-Token`); sending only. Config (token, from
   address, stream, on/off) from `application.ini`.
-- `VerificationCodes` — issue/verify the 6-digit codes (`SecureRandom`, expiring, single-use,
-  attempt-limited). Failed-attempt increments commit on a **separate connection** so the limit
-  survives the request rollback that `UserException` triggers.
+- `VerificationCodes` — issue the 6-digit codes (`SecureRandom`, expiring, attempt-limited);
+  `verify` (consuming — email verification) and `check` (non-consuming — the reset code used as a
+  temporary login) + `clear`. Failed-attempt increments commit on a **separate connection** so the
+  limit survives the request rollback that `UserException` triggers. Reset codes live 30 min.
 - `EmailBodies` — HTML bodies for the verification and reset emails.
 
 ### Auto-update at startup (`src/main/precompiled/com/svnhub/migrate/`)
@@ -201,9 +202,20 @@ verify screen (enter code / resend / log out) until the email is confirmed — a
 and deliverable. Pre-existing accounts were grandfathered to verified by the v4 migration.
 
 **Passwords:** a logged-in user changes their own password from the top-bar account area
-(`AccountService.changePassword`); a forgotten password is reset, unauthenticated, via an emailed code
-(`PasswordResetService`, no account enumeration). Either path updates both the PBKDF2 login hash and the
-clear `svn_password`, then regenerates the svnserve `passwd`. Codes: 15-min TTL, 5 attempts, single-use.
+(`AccountService.changePassword`). **Forgotten password** uses a *temporary-login* model rather than a
+remote reset: `PasswordResetService.requestReset` emails a 6-digit code but **never changes the stored
+password**, so a third party who triggers it cannot disrupt the real user — the existing password keeps
+working. The code itself works as an alternate login credential for **30 minutes** (`Login.login` and
+the periodic `Login.checkLogin` accept it); after signing in with it the user sets a new password via the
+*authenticated* `changePassword`. Any password change updates both the PBKDF2 hash and the clear
+`svn_password`, regenerates the svnserve `passwd`, and clears outstanding reset codes. Email-verify codes
+live 15 min; reset codes 30 min; both are 5-attempt-limited and `SecureRandom`.
+
+**Every web-service call is authenticated** by the framework (`ProcessServlet` → `Login.checkLogin`)
+*except* the irreducible pre-login entry points, which have no session yet: the internal `Login`/`Logout`
+methods, `Register.register`, and `PasswordResetService.requestReset`. These three are the **only**
+`allowWithoutAuthentication` entries (declared in `KissInit.groovy`); everything else — including setting
+a new password — runs only with a valid session.
 
 **Two user classes:**
 - **Regular** (default; all self-registered users) — full rights on repos they own or are granted,
@@ -248,9 +260,10 @@ Exists*.
 
 ## 8. Frontend (`src/main/frontend/`, never the `kiss/` subdir)
 
-- Entry pages: `index.html` (SPA shell), `login.html` (with "Forgot password?"), `register.html`,
-  `why.html`, `verify.html` (email-verification gate, authenticated), `forgot.html` (password reset,
-  unauthenticated).
+- Entry pages: `index.html` (SPA shell), `login.html` (accepts password **or** reset code; "Forgot
+  password?"), `register.html`, `why.html`, `verify.html` (email-verification gate, authenticated),
+  `forgot.html` (request a reset code, unauthenticated), `setpw.html` (set a new password right after
+  signing in with the code).
 - After login (and once verified), `screens/Framework/` is the nav shell — its top bar shows the
   account handle + a **Change password** popup. SvnHub screens:
   `Repositories` (My / Explore + create + access), `Discover` (people directory → a user's public

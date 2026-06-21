@@ -24,8 +24,10 @@ public final class VerificationCodes {
     /** Purpose: authorize a forgotten-password reset. */
     public static final String PURPOSE_RESET = "password_reset";
 
-    /** Default code lifetime, in minutes. */
+    /** Default code lifetime, in minutes (email verification). */
     public static final int DEFAULT_TTL_MINUTES = 15;
+    /** Password-reset code lifetime, in minutes — the temporary-login window. */
+    public static final int RESET_TTL_MINUTES = 30;
     /** Maximum wrong guesses before a code is invalidated. */
     public static final int MAX_ATTEMPTS = 5;
 
@@ -75,13 +77,36 @@ public final class VerificationCodes {
     }
 
     /**
-     * Verify a candidate code for {@code (userId, purpose)}.  Returns true only
-     * on an exact, unexpired, within-attempt-limit match; the row is then
-     * consumed (deleted).  A wrong code increments the attempt counter and
-     * returns false.  Missing, expired, or over-limit codes return false (and an
-     * expired/over-limit row is cleaned up).
+     * Verify a candidate code for {@code (userId, purpose)} and <b>consume</b> it
+     * on success (single-use — used by email verification).  Returns true only on
+     * an exact, unexpired, within-attempt-limit match.  A wrong code increments
+     * the attempt counter.
      */
     public static boolean verify(Connection db, int userId, String purpose, String candidate) throws Exception {
+        return evaluate(db, userId, purpose, candidate, true, true);
+    }
+
+    /**
+     * Check a candidate code for {@code (userId, purpose)} <b>without consuming
+     * it</b> — used where the code acts as a temporary credential (a password-reset
+     * code that works as a login for its whole 30-minute window).  Returns true on
+     * an exact, unexpired, within-attempt-limit match.
+     *
+     * @param countMiss when true, a wrong candidate increments the attempt
+     *        counter (use at login); pass false for periodic re-validation so a
+     *        live session does not burn attempts.
+     */
+    public static boolean check(Connection db, int userId, String purpose, String candidate, boolean countMiss) throws Exception {
+        return evaluate(db, userId, purpose, candidate, false, countMiss);
+    }
+
+    /** Delete all codes for {@code (userId, purpose)} — e.g. after a password change. */
+    public static void clear(Connection db, int userId, String purpose) throws Exception {
+        db.execute("delete from verification_code where user_id = ? and purpose = ?", userId, purpose);
+    }
+
+    private static boolean evaluate(Connection db, int userId, String purpose, String candidate,
+                                    boolean consumeOnMatch, boolean countMiss) throws Exception {
         if (candidate == null)
             return false;
         candidate = candidate.trim();
@@ -94,22 +119,22 @@ public final class VerificationCodes {
         long expires = rec.getLong("expires_ts");
         int attempts = rec.getInt("attempts");
         if (System.currentTimeMillis() > expires || attempts >= MAX_ATTEMPTS) {
-            // Persist the cleanup independently — the caller typically throws a
-            // UserException on a failed verify, which rolls back the request's
-            // transaction (see ProcessServlet.errorReturn).
+            // Clean up independently — callers often throw a UserException on a
+            // failed check, which rolls back the request's transaction
+            // (see ProcessServlet.errorReturn).
             runCommitted("delete from verification_code where code_id = ?", codeId);
             return false;
         }
         String stored = rec.getString("code");
         if (stored != null && stored.trim().equals(candidate)) {
-            // Success path: the caller returns normally, so consume the code on
-            // the request connection — it commits atomically with the caller's work.
-            db.execute("delete from verification_code where code_id = ?", codeId);
+            if (consumeOnMatch)
+                db.execute("delete from verification_code where code_id = ?", codeId);
             return true;
         }
-        // Failed attempt: increment on a separate, immediately-committed
-        // connection so the attempt limit survives the caller's rollback.
-        runCommitted("update verification_code set attempts = attempts + 1 where code_id = ?", codeId);
+        if (countMiss)
+            // Increment on a separate, immediately-committed connection so the
+            // attempt limit survives the caller's rollback.
+            runCommitted("update verification_code set attempts = attempts + 1 where code_id = ?", codeId);
         return false;
     }
 

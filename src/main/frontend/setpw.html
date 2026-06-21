@@ -1,0 +1,24 @@
+<div class="center">
+    <div style="display: inline-block; text-align: center; max-width: 460px;">
+        <h1>Svn-Hub</h1>
+        <div style="margin-bottom: 14px; color: #57606a;">Set a new password</div>
+
+        <p style="color:#24292f; line-height:1.55; margin: 0 0 18px;">
+            You're signed in with your one-time code. Choose a new password to finish.
+        </p>
+
+        <form onsubmit="return false;" autocomplete="off">
+            <div style="display:inline-block; width:130px; text-align:right; margin-right:10px;">New password:</div>
+            <text-input id="password" required password autocomplete="new-password"></text-input>
+            <br>
+            <div style="display:inline-block; width:130px; text-align:right; margin-right:10px; margin-top:10px;">Confirm:</div>
+            <text-input id="password2" style="margin-top:10px;" required password autocomplete="new-password"></text-input>
+            <br>
+            <push-button id="set" style="margin-top:20px;">Set password</push-button>
+        </form>
+
+        <div style="margin-top:18px;">
+            <push-button id="cancel">Cancel</push-button>
+        </div>
+    </div>
+</div>

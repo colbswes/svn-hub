@@ -16,11 +16,13 @@ class KissInit {
 
         MainServlet.readIniFile "application.ini", "main"
 
-        // Methods callable without authentication: public self-registration and
-        // the forgotten-password flow (the user has no session at that point).
+        // The ONLY methods callable without a session — necessarily so, because the
+        // user has no account/session yet (the same reason Login itself is exempt):
+        // self-registration and requesting a password-reset code.  Every other
+        // service is validated by the framework.  Setting a new password is done by
+        // the *authenticated* AccountService.changePassword after signing in.
         MainServlet.allowWithoutAuthentication("services.Register", "register")
         MainServlet.allowWithoutAuthentication("services.PasswordResetService", "requestReset")
-        MainServlet.allowWithoutAuthentication("services.PasswordResetService", "resetPassword")
 
         // Set up a global logout handler that runs whenever any user logs out
         // This can be used for cleanup tasks like logging, closing resources, etc.

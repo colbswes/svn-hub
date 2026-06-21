@@ -66,7 +66,12 @@ class AccountService {
         outjson.put("sent", true)
     }
 
-    /** Change the current user's password (both the web login hash and the SVN credential). */
+    /**
+     * Change the current user's password (both the web login hash and the SVN
+     * credential).  The "current" credential may be either the existing password
+     * or a valid password-reset code — the latter is how a user who signed in
+     * with an emailed code sets a new password.
+     */
     void changePassword(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = (Integer) servlet.getUserData().getUserId()
         String current = injson.getString("currentPassword", "")
@@ -76,11 +81,16 @@ class AccountService {
         Record rec = db.fetchOne("select user_password from users where user_id = ?", userId)
         if (rec == null)
             throw new UserException("Account not found.")
-        if (!passwordMatches(rec.getString("user_password"), current))
+        boolean ok = passwordMatches(rec.getString("user_password"), current)
+        if (!ok)
+            ok = VerificationCodes.check(db, userId, VerificationCodes.PURPOSE_RESET, current, true)
+        if (!ok)
             throw new UserException("Your current password is incorrect.")
         // One credential serves both the web UI (hashed) and svn clients (clear text).
         db.execute("update users set user_password = ?, svn_password = ? where user_id = ?",
                 PasswordHash.hash(next), next, userId)
+        // A password change invalidates any outstanding reset code.
+        VerificationCodes.clear(db, userId, VerificationCodes.PURPOSE_RESET)
         String confDir = MainServlet.getEnvironment("SvnConfDir")
         if (confDir)
             SvnAuthManager.regeneratePasswd(db, confDir + "/passwd")
