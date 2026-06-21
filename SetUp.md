@@ -462,4 +462,5 @@ sudo tar czf /var/backups/svnhub-repos-$(date +%F).tar.gz -C /srv svn
 | Web UI loads but `svn checkout` fails | `svnserve` not running, port 3690 blocked (cloud SG/ufw), or `SvnBaseUrl` wrong. |
 | Verification/reset email never arrives | Postmark sender not verified, or wrong `PostmarkApiToken`. Check `catalina.out` for the Postmark error. |
 | Can't create repos / auth files | Tomcat user lacks write to `/srv/svn`. Ensure `svnhub:svnhub` owns it and both services run as `svnhub`. |
+| `./bld` fails with `rm: error deleting …` (or other permission errors) | Some files under `/opt/svnhub` (often `tomcat/`) are owned by another user from an earlier build run. Fix: `sudo chown -R svnhub:svnhub /opt/svnhub`, then rebuild as `svnhub`. Always build with `sudo -u svnhub ./bld -v build`. |
 ```
