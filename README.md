@@ -9,9 +9,10 @@ history, diffs, issues, merge requests, project visibility controls, and — its
 distinguishing feature — **real checkout/update statistics** that a centralized
 model makes possible but a distributed one cannot.
 
-The full rationale is in the app's own *"Why this service exists"* page; in short:
-one canonical repository, a clear linear revision history, practical auditability,
-genuine usage insight, and independence from large corporate platforms.
+The full rationale is in **[Rationale.md](Rationale.md)** — the *Why This Service
+Exists* page from the application itself. In short: one canonical repository, a
+clear linear revision history, practical auditability, genuine usage insight, and
+independence from large corporate platforms.
 
 ## What it does
 
