@@ -1,8 +1,9 @@
 # Svn-Hub
 
-**Svn-Hub** is a modern, self-hosted, web-based development platform for
-[Apache Subversion](https://subversion.apache.org/) — a GitHub-style experience
-built around SVN instead of Git.
+**Svn-Hub** is a modern, self-hosted, web-based 
+source code repository management system
+ — a GitHub-style experience —
+built around [Apache Subversion](https://subversion.apache.org/) instead of Git.
 
 It gives teams a single, authoritative source of truth with repository browsing,
 history, diffs, issues, merge requests, project visibility controls, and — its
