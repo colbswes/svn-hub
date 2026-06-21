@@ -233,7 +233,7 @@ app there.
 
 ```bash
 cd /opt/svnhub
-sudo -u svnhub ./bld build
+sudo -u svnhub ./bld -v build
 ```
 
 A successful build leaves the deployable app under `/opt/svnhub/tomcat/webapps/ROOT`.
@@ -413,7 +413,7 @@ sudo systemctl stop svnhub
 cd /opt/svnhub
 sudo -u svnhub git pull
 sudo -u svnhub ./bld clean      # REQUIRED when the schema version changes (see note)
-sudo -u svnhub ./bld build
+sudo -u svnhub ./bld -v build
 sudo systemctl start svnhub
 ```
 
@@ -457,7 +457,7 @@ sudo tar czf /var/backups/svnhub-repos-$(date +%F).tar.gz -C /srv svn
 | Symptom | Likely cause / fix |
 |---|---|
 | Startup fails; services get a null DB connection | A bare `Key =` in `application.ini`. Quote empties: `Key = ""`. |
-| A new schema migration didn't apply after an upgrade | Stale compile-time version constant — `./bld clean` then `./bld build`, restart. Verify `SELECT max(version) FROM db_version`. |
+| A new schema migration didn't apply after an upgrade | Stale compile-time version constant — `./bld clean` then `./bld -v build`, restart. Verify `SELECT max(version) FROM db_version`. |
 | Login says "Invalid login." for everyone after a deploy | Schema migration failed (fail-closed). Check `catalina.out` for the `SCHEMA MIGRATION FAILED` banner; fix and restart. |
 | Web UI loads but `svn checkout` fails | `svnserve` not running, port 3690 blocked (cloud SG/ufw), or `SvnBaseUrl` wrong. |
 | Verification/reset email never arrives | Postmark sender not verified, or wrong `PostmarkApiToken`. Check `catalina.out` for the Postmark error. |
