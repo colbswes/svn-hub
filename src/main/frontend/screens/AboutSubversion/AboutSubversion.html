@@ -1,0 +1,163 @@
+<div>
+    <style>
+        .as-content {
+            max-width: 800px;
+            line-height: 1.6;
+        }
+        .as-content h2 {
+            margin-top: 28px;
+            border-bottom: 1px solid #d0d7de;
+            padding-bottom: 6px;
+        }
+        .as-content h3 {
+            margin-top: 22px;
+        }
+        .as-content pre {
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            padding: 14px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+        .as-content code {
+            background: #f6f8fa;
+            border-radius: 4px;
+            padding: 2px 5px;
+            font-size: 13px;
+        }
+        .as-content pre code {
+            background: transparent;
+            border-radius: 0;
+            padding: 0;
+        }
+        .as-content .back-link {
+            margin-bottom: 16px;
+        }
+    </style>
+
+    <div class="back-link">
+        <push-button id="as-back">&larr; Back to Help</push-button>
+    </div>
+
+    <div class="as-content">
+        <h2>Understanding Subversion</h2>
+
+        <h3>Virtual Copies</h3>
+
+        <p>Subversion is not another Git. Although both systems track source code revisions, they do it in significantly different ways. Subversion is simple once you understand its model, but it can be confusing if you approach it with Git concepts in mind.</p>
+
+        <p>The purpose of this page is to explain how Subversion works conceptually. It is probably best, at least at first, to forget how Git or other source code control systems work.</p>
+
+        <p>Imagine that you had no source code control system at all. You might organize your project like this:</p>
+
+        <pre><code>MyProject/trunk/Makefile
+MyProject/trunk/src/main.c
+MyProject/trunk/include/main.h
+MyProject/trunk/docs/Manual.md</code></pre>
+
+        <p>In this structure, the latest development version of the code lives under:</p>
+
+        <pre><code>MyProject/trunk</code></pre>
+
+        <p>Now suppose you have a series of releases of this software. You want to preserve each release so that, when a user reports a problem, they can tell you which version they have and you can see the exact source code for that release.</p>
+
+        <p>Without a source code control system, you might create a separate directory for each release and copy the entire source tree into it:</p>
+
+        <pre><code>MyProject/tags/1
+MyProject/tags/2
+MyProject/tags/3
+MyProject/tags/4
+MyProject/tags/5</code></pre>
+
+        <p>Each of those directories represents a different release of your software. For example, under release <code>4</code>, you would see:</p>
+
+        <pre><code>MyProject/tags/4/Makefile
+MyProject/tags/4/src/main.c
+MyProject/tags/4/include/main.h
+MyProject/tags/4/docs/Manual.md</code></pre>
+
+        <p>The same would be true for the other tag directories. Conceptually, each tag contains a copy of the project as it existed at that point in time.</p>
+
+        <p>This is what Subversion does conceptually. In practice, however, Subversion does not make a full physical copy of every file when you create a tag or branch. Instead, it creates what is often called a <em>cheap copy</em>. The copy behaves like a complete directory tree, but Subversion stores it efficiently by sharing unchanged data with the original tree.</p>
+
+        <p>From your perspective, it looks as though you have separate copies of the project at different stages of development. Internally, Subversion stores those copies efficiently.</p>
+
+        <p>By convention, the <code>tags</code> directory is used to remember particular releases. There is usually another directory named <code>branches</code>, which works the same way. A branch is also created by copying an existing tree, such as <code>trunk</code>, a tag, or another branch.</p>
+
+        <p>The difference between a tag and a branch is mostly a matter of convention:</p>
+
+        <ul>
+            <li>A tag is normally treated as a permanent snapshot of a release.</li>
+            <li>A branch is normally used as a separate line of development.</li>
+        </ul>
+
+        <p>Subversion itself does not enforce this distinction. To Subversion, both tags and branches are ordinary directories created by copying another directory.</p>
+
+        <p>In the example above, the tags were named <code>1</code>, <code>2</code>, <code>3</code>, <code>4</code>, and <code>5</code>. Like regular directories, they can be named anything you want. You could instead use names such as:</p>
+
+        <pre><code>my-initial-release
+my-next-release
+release-2026-06-21
+v1.0.0</code></pre>
+
+        <p>The same is true of branches.</p>
+
+        <p>The names <code>trunk</code>, <code>tags</code>, and <code>branches</code> are also just conventions. Subversion does not require them. They are simply a common structure that makes a repository easier for Subversion users to understand.</p>
+
+        <h3>Revisions</h3>
+
+        <p>There is one more important concept to understand: revisions.</p>
+
+        <p>Think about your main development tree:</p>
+
+        <pre><code>MyProject/trunk</code></pre>
+
+        <p>The tree under <code>trunk</code> represents the latest development version of your project. As you work, you add, change, and delete files under that tree. A single feature or bug fix may involve changes to several files. Those changes are related, and when they reach a stable state, you commit them together with a message describing what changed.</p>
+
+        <p>Subversion maintains a sequential revision number for the entire repository. Each time a commit is accepted, Subversion creates a new revision. That revision represents the state of the entire repository after the commit.</p>
+
+        <p>For example, the first committed change becomes revision 1. The next committed change becomes revision 2, and so on.</p>
+
+        <p>This revision number does not apply only to <code>trunk</code>. It applies to the entire repository, including <code>trunk</code>, <code>tags</code>, and <code>branches</code>. A single revision number identifies the state of the whole repository at a particular point in time.</p>
+
+        <p>In Subversion, you can check out a directory tree, such as <code>trunk</code>, a tag, or a branch, as it existed at a particular revision.</p>
+
+        <p>Once a change is committed, it receives the next sequential revision number. Subversion does not rewrite previous revision numbers. The history of committed changes remains available, so you can return to earlier states of the repository when needed.</p>
+
+        <h3>Other Features</h3>
+
+        <p>Subversion has the features you would expect from a source code control system, including branching, merging, history, diffs, and the ability to see who changed what and when. Those features all work within the model described above.</p>
+
+        <p>One thing that can make Subversion feel low-level is that branches and tags are created with copy operations. Subversion does not treat branches and tags as special object types in the same way that some other systems do. Instead, it provides a general copy operation, and users apply conventions to those copies.</p>
+
+        <p>The copies are efficient, but the commands can sometimes feel cumbersome or verbose. To make common workflows easier, we have created shell scripts that simplify working with Subversion:</p>
+
+        <pre><code>https://github.com/blakemcbride/Subversion-Utils</code></pre>
+
+        <h3>Using Subversion</h3>
+
+        <p>One important practical point is that you usually do <strong>not</strong> want to check out the top-level project directory, such as:</p>
+
+        <pre><code>MyProject</code></pre>
+
+        <p>Instead, you normally want to check out a specific line of development, such as:</p>
+
+        <pre><code>MyProject/trunk
+MyProject/tags/some-release
+MyProject/branches/my-branch</code></pre>
+
+        <p>If you check out <code>MyProject</code> itself, you will get everything underneath it: the trunk, all tags, and all branches. In a mature project, that could mean checking out a huge number of files you did not actually want.</p>
+
+        <p>So, in normal use, check out the specific trunk, tag, or branch you intend to work with.</p>
+
+        <p>Another important thing to understand is that Subversion is centralized. Most operations are performed against a central repository, which is often hosted on a server or in the cloud. Because of that, operations such as checkout, update, commit, copy, merge, and viewing repository history generally require a connection to that repository.</p>
+
+        <p>Once you have a working copy checked out, you can still edit files locally while offline. However, you will need a connection to the repository before you can commit your changes or receive updates from other users.</p>
+
+        <p>For more detail, the Subversion user manual is freely available here:</p>
+
+        <pre><code>https://svnbook.red-bean.com/</code></pre>
+    </div>
+</div>

@@ -27,6 +27,11 @@
         Utils.loadPage('screens/Users/Users', screenArea);
     });
 
+    $$('help').onclick(function () {
+        Utils.cleanup();
+        Utils.loadPage('screens/Help/Help', screenArea);
+    });
+
     $$('logout').onclick(function () {
         Server.logout();
     });
