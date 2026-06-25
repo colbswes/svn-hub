@@ -3,6 +3,8 @@
 Step-by-step instructions to deploy SvnHub on a fresh **Ubuntu 24.04 LTS** (also
 works on 22.04) cloud server. Commands assume a `sudo`-capable login.
 
+> Setting up a **local development machine** instead? See **[Setup-Devel.md](Setup-Devel.md)**.
+
 > **What you are installing.** SvnHub is a Kiss-framework Java/Groovy web app
 > (front + back served by **Tomcat 11**), backed by **PostgreSQL**, fronting a
 > **Subversion** `svnserve` daemon. Statistics come from svnserve's `--log-file`.

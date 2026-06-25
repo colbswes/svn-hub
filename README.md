@@ -60,8 +60,10 @@ MCP) that Svn-Hub builds upon.
 
 ## Getting started
 
-- **Deployment:** step-by-step instructions for a cloud Ubuntu server are in
-  [SetUp.md](SetUp.md).
+- **Deployment:** step-by-step instructions for a production cloud Ubuntu server
+  are in [Setup-Cloud.md](Setup-Cloud.md).
+- **Development:** to set up a local development machine, see
+  [Setup-Devel.md](Setup-Devel.md).
 - **Architecture:** the full system design is in [Architecture.md](Architecture.md).
 
 Source: [github.com/blakemcbride/svn-hub](https://github.com/blakemcbride/svn-hub)
