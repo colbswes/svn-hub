@@ -1,9 +1,13 @@
 
-/* global $$, DOMUtils, Server, Utils */
+/* global $$, Server, Utils, Router */
 
 'use strict';
 
 (function () {
+
+    //  Reaching the login screen ends any existing session so a fresh login is required
+    //  (e.g. when the user backs into it from inside the app).
+    Server.clearSession();
 
     async function login() {
         if ($$('username').isError('Email'))
@@ -18,6 +22,7 @@
         const res = await Server.call('', 'Login', data);
         if (res._Success) {
             Server.setUUID(res.uuid);
+            Server.setBootId(res._BootId);   //  record the server instance this session belongs to
             Utils.saveData('isAdmin', res.isAdmin === true);
             Utils.saveData('handle', res.handle);
             Utils.saveData('email', res.email);
@@ -26,17 +31,13 @@
                 // Signed in with an emailed reset code → must set a new password.
                 // Carry the code so the (authenticated) change-password can use it.
                 Utils.saveData('resetCredential', data.password);
-                Utils.loadPage('setpw');
+                Router.go('/setpw');
             } else if (res.emailVerified === true) {
-                DOMUtils.preventNavigation(true, function() {
-                    Utils.yesNo('Confirm', 'Are you sure you want to logout?', function() {
-                        Server.logout();
-                    });
-                });
-                Utils.loadPage('screens/Framework/Framework');
+                //  Go where the user was originally headed (deep link), else the home shell.
+                Router.go(Router.returnTarget());
             } else {
                 // Gate the app until the email address is verified.
-                Utils.loadPage('verify');
+                Router.go('/verify');
             }
         } else {
             $$('password').clear().focus();
@@ -46,15 +47,15 @@
     $$('login').onclick(login);
 
     $$('why-button').onclick(function () {
-        Utils.loadPage('why');
+        Router.go('/why');
     });
 
     $$('to-register').onclick(function () {
-        Utils.loadPage('register');
+        Router.go('/register');
     });
 
     $$('to-forgot').onclick(function () {
-        Utils.loadPage('forgot');
+        Router.go('/forgot');
     });
 
     $$('username').onEnter(function () {

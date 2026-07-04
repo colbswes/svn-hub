@@ -7,7 +7,9 @@
     const repoId = Utils.getData('repoId');
     const repoName = Utils.getData('repoName');
     if (!repoId) {
-        Utils.loadPage('screens/Repositories/Repositories', 'app-screen-area');
+        //  Deep link with no repository selected — go to the list (replace, so the
+        //  Back button doesn't return to this dead end).
+        Router.replace('/repositories');
         return;
     }
     let current = null;   // currently open issue number
@@ -30,8 +32,7 @@
 
     $$('iss-repo').setValue(repoName || ('#' + repoId));
     $$('iss-back').onclick(() => {
-        Utils.cleanup();
-        Utils.loadPage('screens/Repository/Repository', 'app-screen-area');
+        Router.go('/repository');
     });
 
     $$('iss-filter').clear();

@@ -348,110 +348,6 @@ public class Tasks {
         copyRegex("src/main/core/org/kissweb/lisp", explodedDir + "/WEB-INF/classes/org/kissweb/lisp", ".*\\.lisp", null, false);
         copy("src/main/core/log4j2.xml", explodedDir + "/WEB-INF/classes");
         copyForce("src/main/core/WEB-INF/web-unsafe.xml", explodedDir + "/WEB-INF/web.xml");
-        stampIndexHtml();
-    }
-
-    /**
-     * Stamp cache-control metadata into the DEPLOYED index.html (under
-     * {@code work/exploded}) so every build busts the browser cache.  Replaces the
-     * placeholders shipped in the source file:
-     * <ul>
-     *   <li>{@code softwareVersion} &rarr; a fresh UUID (unique per build; used as
-     *       the {@code ?ver=} cache-busting key on every loaded script)</li>
-     *   <li>{@code releaseDate} &rarr; the build date/time</li>
-     *   <li>{@code controlCache} &rarr; {@code true} (enable cache busting)</li>
-     * </ul>
-     * Only the deployed copy is stamped; the source {@code src/main/frontend/index.html}
-     * keeps {@code controlCache = false} so the {@code develop} server (which serves
-     * the source tree live) still reflects front-end edits without a rebuild.
-     */
-    private static void stampIndexHtml() {
-        final String indexFile = explodedDir + "/index.html";
-        if (!exists(indexFile))
-            return;
-        try {
-            String html = readFileText(indexFile);
-            final String version = java.util.UUID.randomUUID().toString();
-            final String date = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
-            html = html.replace("SystemInfo.softwareVersion = \"EDIT-1\";",
-                    "SystemInfo.softwareVersion = \"" + version + "\";");
-            html = html.replace("SystemInfo.releaseDate = \"EDIT-2\";",
-                    "SystemInfo.releaseDate = \"" + date + "\";");
-            html = html.replace("SystemInfo.controlCache = false;",
-                    "SystemInfo.controlCache = true;");
-            rm(indexFile);
-            writeToFile(indexFile, html);
-            printlnIfVerbose("stamped index.html (version=" + version + ", releaseDate=" + date + ")");
-        } catch (Exception e) {
-            throw new RuntimeException("stampIndexHtml: error stamping " + indexFile + ": " + e.getMessage());
-        }
-    }
-
-    /** Read a whole text file (UTF-8) at build time. */
-    private static String readFileText(String path) throws java.io.IOException {
-        return new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)),
-                java.nio.charset.StandardCharsets.UTF_8);
-    }
-
-    /**
-     * Read a single {@code key = value} from an ini file at build time.  Ignores
-     * blank lines, {@code #}/{@code ;} comments, and {@code [section]} headers;
-     * strips surrounding double quotes.  Returns null if the file or key is absent.
-     */
-    private static String readIniValue(String iniPath, String key) {
-        if (!exists(iniPath))
-            return null;
-        try {
-            for (String raw : readFileText(iniPath).split("\n")) {
-                String s = raw.trim();
-                if (s.isEmpty() || s.startsWith("#") || s.startsWith(";") || s.startsWith("["))
-                    continue;
-                int eq = s.indexOf('=');
-                if (eq < 0)
-                    continue;
-                if (!s.substring(0, eq).trim().equals(key))
-                    continue;
-                String v = s.substring(eq + 1).trim();
-                if (v.length() >= 2 && v.startsWith("\"") && v.endsWith("\""))
-                    v = v.substring(1, v.length() - 1);
-                return v.trim();
-            }
-        } catch (Exception e) {
-            // treat as unset
-        }
-        return null;
-    }
-
-    /**
-     * Stamp the production CORS allowed-origins into the deployed web.xml from the
-     * {@code AllowedOrigins} key in application.ini.  Called from {@link #war()},
-     * where web.xml is the secure variant whose Tomcat {@code CorsFilter} enforces
-     * an origin allow-list.  Set {@code AllowedOrigins} to the public URL(s) users
-     * load the site from (comma-separated), e.g. {@code https://svnhub.example.com}.
-     * When unset, the web-secure.xml default (localhost dev origins) is left in
-     * place — so production browsers would be refused (403) until it is configured.
-     */
-    private static void stampCorsOrigins() {
-        final String webXml = explodedDir + "/WEB-INF/web.xml";
-        if (!exists(webXml))
-            return;
-        final String origins = readIniValue("src/main/backend/application.ini", "AllowedOrigins");
-        if (origins == null || origins.isEmpty())
-            return;   // not configured -> leave the web-secure.xml localhost default
-        final String DEFAULT_ORIGINS = "http://localhost:8000,http://localhost:63342";
-        try {
-            String xml = readFileText(webXml);
-            if (!xml.contains(DEFAULT_ORIGINS)) {
-                printlnIfVerbose("stampCorsOrigins: origins marker not found in web.xml; skipping");
-                return;
-            }
-            xml = xml.replace(DEFAULT_ORIGINS, origins);
-            rm(webXml);
-            writeToFile(webXml, xml);
-            printlnIfVerbose("stamped CORS allowed origins: " + origins);
-        } catch (Exception e) {
-            throw new RuntimeException("stampCorsOrigins: error stamping " + webXml + ": " + e.getMessage());
-        }
     }
 
     /**
@@ -459,11 +355,57 @@ public class Tasks {
      */
     public static void war() {
         buildSystem();
+        stampVersion();
         copyForce("src/main/core/WEB-INF/web-secure.xml", explodedDir + "/WEB-INF/web.xml");
-        stampCorsOrigins();
         createJar(explodedDir, BUILDDIR + "/Kiss.war");
         copyForce("src/main/core/WEB-INF/web-unsafe.xml", explodedDir + "/WEB-INF/web.xml");
+        // Un-stamp the staged frontend files.  stampVersion() rewrote these in place
+        // (production cache-busting); the WAR has already captured the stamped copies.
+        // copyTree() in a later buildSystem() is mtime-incremental and would NOT overwrite
+        // the newer stamped files with the older source, so without this restore a
+        // subsequent 'develop' would silently run with production busting (stale ?ver,
+        // double index.html load).  copyForce overwrites regardless of mtime.  Mirrors
+        // the web.xml secure->jar->unsafe swap above.
+        copyForce("src/main/frontend/index.html",   explodedDir + "/index.html");
+        copyForce("src/main/frontend/SystemInfo.js", explodedDir + "/SystemInfo.js");
         //println("Kiss.war has been created in the " + BUILDDIR + " directory");
+    }
+
+    /**
+     * Stamp production cache-busting values into the WAR's frontend copies.
+     * <br><br>
+     * Sets a fresh software version (a new UUID) and the current release date, and turns
+     * cache control on, so every WAR forces clients to download the new code.  The version
+     * and cache-control flag live in <code>index.html</code> (<code>kiss-version</code> /
+     * <code>kiss-cache-control</code> meta tags — the only perpetually-fresh file); the
+     * release date lives in <code>SystemInfo.js</code>.
+     * <br><br>
+     * Operates on the staged copies in <code>explodedDir</code> only, so the source files
+     * keep their EDIT placeholders.  Modifies only the meta values, not the bootstrap
+     * kernel, so the CSP hash is unaffected.
+     */
+    private static void stampVersion() {
+        final String uuid = java.util.UUID.randomUUID().toString();
+        final String date = java.time.LocalDate.now().toString();
+        try {
+            final java.nio.file.Path idx = java.nio.file.Paths.get(explodedDir, "index.html");
+            String html = java.nio.file.Files.readString(idx);
+            html = html.replaceAll("(name=\"kiss-version\"\\s+content=\")[^\"]*(\")",
+                    "$1" + java.util.regex.Matcher.quoteReplacement(uuid) + "$2");
+            html = html.replaceAll("(name=\"kiss-cache-control\"\\s+content=\")[^\"]*(\")",
+                    "$1true$2");
+            java.nio.file.Files.writeString(idx, html);
+
+            final java.nio.file.Path si = java.nio.file.Paths.get(explodedDir, "SystemInfo.js");
+            String js = java.nio.file.Files.readString(si);
+            js = js.replaceAll("(SystemInfo\\.releaseDate\\s*=\\s*\")[^\"]*(\")",
+                    "$1" + java.util.regex.Matcher.quoteReplacement(date) + "$2");
+            java.nio.file.Files.writeString(si, js);
+
+            println("WAR stamped: kiss-version=" + uuid + ", releaseDate=" + date + ", cache-control=true");
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to stamp version into WAR frontend files", e);
+        }
     }
 
     private static void deployWar() {

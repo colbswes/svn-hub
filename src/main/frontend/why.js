@@ -1,12 +1,12 @@
 
-/* global $$, Utils */
+/* global $$, Router */
 
 'use strict';
 
 (function () {
 
     $$('why-back').onclick(function () {
-        Utils.loadPage('login');
+        Router.go('/login');
     });
 
 })();

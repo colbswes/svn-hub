@@ -1,5 +1,5 @@
 
-/* global $$, Server, Utils */
+/* global $$, Server, Utils, Router */
 
 'use strict';
 
@@ -18,7 +18,7 @@
         if (res._Success) {
             Utils.saveData('emailVerified', true);
             await Utils.showMessage('Verified', 'Your email address has been verified.');
-            Utils.loadPage('screens/Framework/Framework');
+            Router.go('/');
         } else {
             $$('code').clear().focus();
         }
@@ -32,7 +32,7 @@
         if (res._Success) {
             if (res.alreadyVerified === true) {
                 Utils.saveData('emailVerified', true);
-                Utils.loadPage('screens/Framework/Framework');
+                Router.go('/');
                 return;
             }
             Utils.showMessage('Code sent', 'A new verification code has been sent to your email address.');

@@ -258,6 +258,20 @@ All compiled classes go to `work/exploded/WEB-INF/classes/`
 - Configurable user inactivity timeout
 - UUID-based session tracking
 
+### CORS and Reverse Proxies (web-secure.xml / web-unsafe.xml)
+
+Kiss ships two web.xml variants in `src/main/core/WEB-INF/`:
+- `web-unsafe.xml` — deployed by `buildSystem()` for development; `cors.allowed.origins = *` (needed because the dev frontend `:8000` and backend `:8080` are different origins)
+- `web-secure.xml` — swapped in by `./bld war` for the production WAR; keeps a localhost-only allow-list (`http://localhost:8000,http://localhost:63342`)
+
+**No per-deployment CORS configuration is needed in production.** In the normal single-WAR deployment, frontend and backend are same-origin. Browsers still send an `Origin` header on every POST (the Fetch spec attaches it to all non-GET requests, even same-origin ones), so Tomcat's CorsFilter engages — but it classifies the request as NOT_CORS via `RequestUtil.isSameOrigin()` and never consults the allow-list. The localhost allow-list in `web-secure.xml` is therefore harmless in production; it only blocks genuinely foreign origins.
+
+**TLS-terminating reverse proxies would break same-origin detection** — the proxy forwards over plain http, so Tomcat would believe the scheme is http while the browser's `Origin` says https; the mismatch misclassifies every API call as cross-origin and CorsFilter returns 403. For this reason `web-secure.xml` includes Tomcat's `RemoteIpFilter`, mapped BEFORE the CorsFilter, with `protocolHeader = X-Forwarded-Proto`. It restores the original scheme/port and trusts the header only from loopback/private (RFC 1918) source addresses (the `internalProxies` default), so outside clients cannot spoof it. The proxy must send `X-Forwarded-Proto` and pass `Host` through — standard reverse-proxy practice. Deployments not behind a proxy are unaffected.
+
+**Split deployments are the one true cross-origin case.** If the frontend is served from a different origin than the backend (`SystemInfo.backendUrl` set), the frontend origin must be added to `cors.allowed.origins` in `web-secure.xml` by hand — no same-origin bypass can apply there.
+
+(An earlier `AllowedOrigins` application.ini key that the build stamped into the deployed web.xml was removed in favor of the RemoteIpFilter approach — it required per-deployment configuration for what the server can determine automatically.)
+
 ### Password Storage (org.kissweb.PasswordHash)
 
 `org.kissweb.PasswordHash` is the framework utility for storing user passwords. Passwords must be stored using this class — never as plain text, and never with reversible encryption.
@@ -1085,41 +1099,60 @@ Utils.makeDraggable(
 - Calls `header.releasePointerCapture(e.pointerId)` in `endDrag` to cleanly release capture
 - Guards `isPrimary` so multi-touch sequences (second finger down) do not start a second drag
 
-## Script Loading Order
+## Front-End Bootstrap and Script Loading
 
-**CRITICAL:** DOMUtils.js must be fully loaded before Utils.js and other framework scripts.
+`index.html` is a minimal, byte-stable bootstrap. The cache-busting values live in
+`<meta name="kiss-version">` / `<meta name="kiss-cache-control">`; the one inline
+script (the "kernel") keeps index.html perpetually fresh via a `?now` redirect,
+defines `window.cacheBust()`, and loads `kiss/bootstrap.js` version-busted. The
+kernel's sha256 CSP hash is pinned in `SecurityHeadersFilter`
+(`org.kissweb.restServer`), so the kernel must remain **byte-for-byte unchanged** —
+all per-deploy values belong in the meta tags (or `SystemInfo.js`), never in the
+kernel. `./bld war` stamps the staged copies via `stampVersion()` (fresh UUID
+version, releaseDate into `SystemInfo.js`, cache-control on) and restores them after
+the WAR is captured; the source files keep their `EDIT` placeholders.
 
-The `index.html` file uses two helper functions for loading scripts:
-- `getScript(url)` - Loads a single script file (returns Promise)
-- `getScripts(urls)` - Loads multiple scripts **in parallel** using Promise.all()
+`kiss/bootstrap.js` then loads everything in the correct order: stylesheets
+(normalize, `kiss/Utils.css`, ag-grid), vendor libs (ag-grid, ckeditor),
+`SystemInfo.js` (per-deploy config; the meta values are mirrored onto
+`SystemInfo.softwareVersion` / `.controlCache` so existing references keep working),
+`kiss/DOMUtils.js` (before Utils.js — a hard requirement), `kiss/AppState.js`
+(+`AppState.init()`), the framework libs (Utils, Date/Time/Number utils, Server,
+Router, AGGrid, Editor, MutableString), and finally the application-owned
+`routes.js` and `index.js`. Applications no longer write loader code in index.html;
+application-specific libraries and stylesheets are loaded from `index.js` using the
+bootstrap's global `getScript` / `getScripts` / `addStylesheet` (all version-busted
+through `window.cacheBust`).
 
-### Correct Loading Pattern
+**AppState** (`kiss/AppState.js`) is the front-end state store backing the session
+token (`_uuid`) and `Utils.saveData`/`getData`. Storage is selected by
+`SystemInfo.stateStore`: `'session'` (per-tab sessionStorage — default), `'local'`,
+or `'memory'`. Sessions therefore survive a reload; `Server.verifyServerInstance()`
+(call it in `index.js` before `Router.start()`) drops the persisted session when the
+backend has restarted (`_BootId` mismatch). AppState is **required** by the current
+`Server.js`; Router is optional (`Server.js` guards it with `typeof Router`).
 
-```javascript
-async function loadUtils() {
-    // Load DOMUtils first (must complete before Utils.js)
-    await getScript("kiss/DOMUtils.js");
-    // Load remaining scripts in parallel
-    await getScripts([
-        "kiss/Utils.js",
-        "kiss/DateUtils.js",
-        "kiss/DateTimeUtils.js",
-        "kiss/TimeUtils.js",
-        "kiss/NumberUtils.js",
-        "kiss/Server.js",
-        "kiss/AGGrid.js",
-        "kiss/Editor.js",
-        "kiss/MutableString.js"
-    ]);
-    getScript("index.js");
-}
-```
+## Hash Routing (kiss/Router.js)
 
-**Why This Matters:**
-- `getScripts()` loads files in parallel, not sequentially
-- Utils.js checks for DOMUtils object at load time (line 17-18)
-- If DOMUtils hasn't finished loading, you'll get: "DOMUtils object not found - DOMUtils.js should be loaded before Utils.js"
-- This is a race condition that can cause intermittent startup failures
+`Router` maps URL hashes (`#/path`) onto Kiss's two navigation levels: full-body
+screens (shells, login) and sub-screens loaded into a region (`tag`) of their shell.
+Routes are declared in application-owned `routes.js`:
+`Router.add(path, {page, tag, shell, focus, auth})` — `page` may be a function
+(device-aware screens); `auth` defaults to true, and unauthenticated users are
+redirected to `/login` with a `?return=` deep link (`Router.returnTarget()` gives
+the post-login destination). `Router.setScreenRoot('screens', {shell, tag})` enables
+file-based fallback: paths matching no route load as screens under the root by
+convention. Path parameters (`:name`) reach the screen via the `loadPage` `argv`
+mechanism and `Router.params()`.
+
+Navigation API: `Router.go(path[, tag])` (pushes history), `Router.replace(path)`
+(no Back entry — use after login or for bad-deep-link redirects),
+`Router.gotoLogin(captureReturn)` (used by `Server.js` on session expiry). Screens
+navigate exclusively with `Router.go` — `Utils.loadPage` cleans up internally
+(`Utils.cleanup()`) and is called by the Router; manual `cleanup()` +
+`loadPage(...)` navigation is the pre-Router pattern. The browser Back/Forward
+buttons become in-app navigation, so do **not** combine the Router with
+`DOMUtils.preventNavigation` (they fight over history).
 
 ## Login Form Structure
 
@@ -1268,4 +1301,4 @@ SvnServicePassword = ""    # correct
 
 ---
 
-*Last Updated: 2026-06-18*
+*Last Updated: 2026-07-03*

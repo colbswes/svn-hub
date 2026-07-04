@@ -1,5 +1,5 @@
 
-/* global $$, DOMUtils, Server, Utils */
+/* global $$, Server, Utils, Router */
 
 'use strict';
 
@@ -44,30 +44,26 @@
         const login = await Server.call('', 'Login', {username: email, password: password});
         if (login._Success) {
             Server.setUUID(login.uuid);
+            Server.setBootId(login._BootId);   //  record the server instance this session belongs to
             Utils.saveData('isAdmin', login.isAdmin === true);
             Utils.saveData('handle', login.handle);
             Utils.saveData('email', login.email);
             Utils.saveData('emailVerified', login.emailVerified === true);
             // New accounts are unverified: send them to verify their email first.
             if (login.emailVerified === true) {
-                DOMUtils.preventNavigation(true, function () {
-                    Utils.yesNo('Confirm', 'Are you sure you want to logout?', function () {
-                        Server.logout();
-                    });
-                });
-                Utils.loadPage('screens/Framework/Framework');
+                Router.go('/');
             } else {
-                Utils.loadPage('verify');
+                Router.go('/verify');
             }
         } else {
-            Utils.loadPage('login');
+            Router.go('/login');
         }
     }
 
     $$('register').onclick(doRegister);
     $$('password2').onEnter(doRegister);
     $$('to-login').onclick(function () {
-        Utils.loadPage('login');
+        Router.go('/login');
     });
     $$('email').focus();
 

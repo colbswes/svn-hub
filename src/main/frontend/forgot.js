@@ -1,5 +1,5 @@
 
-/* global $$, Server, Utils */
+/* global $$, Server, Router */
 
 'use strict';
 
@@ -24,7 +24,7 @@
     $$('send-code').onclick(sendCode);
     $$('email').onEnter(sendCode);
     $$('to-login').onclick(function () {
-        Utils.loadPage('login');
+        Router.go('/login');
     });
 
     $$('email').focus();

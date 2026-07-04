@@ -1,4 +1,4 @@
-/* global $$, Utils, Server, AGGrid, DateTimeUtils, marked, hljs, Diff2Html */
+/* global $$, Utils, Server, AGGrid, DateTimeUtils, marked, hljs, Diff2Html, Router */
 'use strict';
 
 (async function () {
@@ -10,7 +10,9 @@
     const repoKey = Utils.getData('repoKey');
     const repoName = Utils.getData('repoName');
     if (!repoId) {
-        Utils.loadPage('screens/Repositories/Repositories', 'app-screen-area');
+        //  Deep link with no repository selected — go to the list (replace, so the
+        //  Back button doesn't return to this dead end).
+        Router.replace('/repositories');
         return;
     }
 
@@ -18,16 +20,13 @@
 
     $$('repo-title').setValue(repoName || repoKey);
     $$('back').onclick(() => {
-        Utils.cleanup();
-        Utils.loadPage('screens/Repositories/Repositories', 'app-screen-area');
+        Router.go('/repositories');
     });
     $$('go-issues').onclick(() => {
-        Utils.cleanup();
-        Utils.loadPage('screens/Issues/Issues', 'app-screen-area');
+        Router.go('/issues');
     });
     $$('go-mrs').onclick(() => {
-        Utils.cleanup();
-        Utils.loadPage('screens/MergeRequests/MergeRequests', 'app-screen-area');
+        Router.go('/merge-requests');
     });
 
     // ---- helpers ----

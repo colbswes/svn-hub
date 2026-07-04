@@ -1,5 +1,5 @@
 
-/* global $$, Utils, Server */
+/* global $$, Utils, Server, Router */
 
 'use strict';
 
@@ -8,28 +8,23 @@
     const screenArea = 'app-screen-area';
 
     $$('repositories').onclick(function () {
-        Utils.cleanup();
-        Utils.loadPage('screens/Repositories/Repositories', screenArea);
+        Router.go('/repositories');
     });
 
     $$('discover').onclick(function () {
-        Utils.cleanup();
-        Utils.loadPage('screens/Discover/Discover', screenArea);
+        Router.go('/discover');
     });
 
     $$('insights').onclick(function () {
-        Utils.cleanup();
-        Utils.loadPage('screens/Insights/Insights', screenArea);
+        Router.go('/insights');
     });
 
     $$('users').onclick(function () {
-        Utils.cleanup();
-        Utils.loadPage('screens/Users/Users', screenArea);
+        Router.go('/users');
     });
 
     $$('help').onclick(function () {
-        Utils.cleanup();
-        Utils.loadPage('screens/Help/Help', screenArea);
+        Router.go('/help');
     });
 
     $$('logout').onclick(function () {
@@ -79,8 +74,10 @@
     if (Utils.getData('isAdmin') !== true)
         $$('users').hide();
 
-    // Land on the repository list by default.
-    Utils.cleanup();
-    Utils.loadPage('screens/Repositories/Repositories', screenArea);
+    // When the shell route itself is the destination ('#/'), show the repository
+    // list by default.  When the Router is loading a sub-screen (e.g. '#/issues'),
+    // it fills the content region itself, so don't load anything here.
+    if (Router.current() === '/')
+        Utils.loadPage('screens/Repositories/Repositories', screenArea);
 
 })();

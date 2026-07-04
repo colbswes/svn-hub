@@ -66,8 +66,7 @@
         Utils.saveData('repoId', row.repoId);
         Utils.saveData('repoKey', row.repoKey);
         Utils.saveData('repoName', row.name);
-        Utils.cleanup();
-        Utils.loadPage('screens/Repository/Repository', 'app-screen-area');
+        Router.go('/repository');
     }
     $$('repo-open').onclick(openRepo);
 

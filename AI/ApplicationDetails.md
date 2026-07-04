@@ -91,6 +91,29 @@ diffs) is rendered by libs in `frontend/lib/` (marked, highlight.js, diff2html; 
 is loaded but charts are currently drawn as HTML/CSS) and injected via the component
 API `text-label.setHTMLValue(...)` — **app screens never touch the DOM directly**.
 
+## Navigation (hash routing, since 2026-07-03)
+SvnHub uses Kiss's hash router and bootstrap architecture: `index.html` (byte-stable
+kernel; CSP hash pinned in SecurityHeadersFilter) → `kiss/bootstrap.js` →
+`SystemInfo.js` → framework libs → `routes.js` → `index.js`. Routes are declared in
+`frontend/routes.js`; `index.js` loads SvnHub's extra libs/stylesheets (marked,
+highlight.js, diff2html, Chart.js) with the bootstrap's global loaders, then calls
+`Router.start()`.
+- Screens navigate **only** with `Router.go('/path')` (Router calls `Utils.loadPage`
+  internally, which also does the cleanup) — never `Utils.loadPage` for navigation.
+- Shell is `/` (`screens/Framework/Framework`); it lands on the repository list when
+  the shell route itself is the destination. Sub-screens render into `app-screen-area`.
+- Public routes (`auth:false`): `/login` (device-aware page), `/why`, `/register`,
+  `/forgot`. Authenticated full-body gates: `/verify`, `/setpw`.
+- Repo-scoped screens (`/repository`, `/issues`, `/merge-requests`) read
+  `repoId`/`repoKey`/`repoName` via `Utils.getData` (AppState-backed, survives reload)
+  and `Router.replace('/repositories')` when absent (bad deep link).
+- Back/Forward are in-app navigation. The old `DOMUtils.preventNavigation`
+  logout-confirm was **removed** — it fights hash routing. Logout and session expiry
+  route to `/login` via `Server.logout()` / `Router.gotoLogin()`.
+- Sessions persist per tab (`SystemInfo.stateStore = 'session'`);
+  `Server.verifyServerInstance()` in `index.js` forces re-login after a backend
+  restart (`_BootId` mismatch).
+
 ## Configuration (`application.ini [main]`)
 `DatabaseType=PostgreSQL`, `DatabaseName/User/Password=svnhub`, plus SvnHub keys:
 `SvnReposRoot`, `SvnConfDir`, `SvnLogFile`, `SvnLogRotateGlob`, `SvnLogPathPrefix`,
