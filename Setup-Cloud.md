@@ -196,23 +196,12 @@ MailFrom          = do_not_reply@svn-hub.com
 MailFromName      = Svn-Hub
 MailMessageStream = outbound
 MailEnabled       = true
-
-# --- Web / CORS ---
-# Public origin(s) the browser loads the site from (comma-separated, no trailing
-# slash). REQUIRED: the build stamps this into the production web.xml's CORS
-# allow-list. If unset, browsers get a 403 ("Error communicating with the server")
-# on every API call. Use your real domain here.
-AllowedOrigins    = https://svnhub.example.com
 ```
 
 > **Critical gotcha:** every key must have a value, and **empty values must be
 > quoted** as `Key = ""`. A bare `Key =` parses to `null` and crashes startup
 > (the database is then never configured). `SvnServicePassword = ""` above is
 > correct.
-
-> **CORS:** `AllowedOrigins` must match the URL in your browser's address bar
-> exactly (scheme + host, e.g. `https://svnhub.example.com`). The back-end keeps
-> CORS enforced — requests from any other origin are still rejected.
 
 Lock the file down (it contains secrets):
 
@@ -371,6 +360,12 @@ sudo nginx -t && sudo systemctl reload nginx
 # Obtain and install a Let's Encrypt certificate (also configures the 80->443 redirect)
 sudo certbot --nginx -d svnhub.example.com
 ```
+
+> **Don't trim the `proxy_set_header` lines.** `Host` and `X-Forwarded-Proto` are
+> load-bearing: nginx terminates TLS, so they are how Tomcat learns the original
+> host and scheme and recognizes browser requests as same-origin. Without them,
+> every API call is misclassified as cross-origin and rejected with a 403
+> ("Error communicating with the server").
 
 Browse to **https://svnhub.example.com** — the SvnHub login page should load.
 

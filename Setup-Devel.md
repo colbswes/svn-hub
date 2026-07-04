@@ -183,12 +183,10 @@ MailEnabled       = false
 > the 6-digit codes during registration without a Postmark account. Leave Postmark
 > blank.
 
-> **CORS in dev:** you do **not** need to touch `AllowedOrigins`. The dev build
-> (`./bld develop` / `./bld build`) deploys the permissive `web-unsafe.xml`
+> **CORS in dev:** nothing to configure. The dev build (`./bld develop` /
+> `./bld build`) deploys the permissive `web-unsafe.xml`
 > (`cors.allowed.origins = *`), so the `:8000` front-end can call the `:8080`
-> back-end freely. (`AllowedOrigins` is only stamped into the locked-down web.xml by
-> `./bld war` for production.) Just leave the template's value in place — but keep it
-> non-empty or quoted, per the gotcha above.
+> back-end freely.
 
 ---
 
