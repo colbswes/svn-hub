@@ -1,67 +1,100 @@
-<div>
+<div class="page-shell wrap-wide admin-shell">
+    <header class="page-header admin-page-header">
+        <div class="page-title-block">
+            <h1>Administration</h1>
+            <div class="lead" id="admin-lead">Manage logins, SVN credentials, account status, and administrator access.</div>
+        </div>
+    </header>
 
-    <style>
-        .space {
-            margin-left: 10px;
-        }
+    <aside class="admin-sidebar" aria-label="Administration sections">
+        <div class="admin-sidebar-title">Admin</div>
+        <push-button id="admin-tab-users" class="admin-side-btn active">User Management</push-button>
+        <push-button id="admin-tab-scan" class="admin-side-btn">Scan Disk</push-button>
+    </aside>
 
-        .grid-layout {
-            display: grid;
-            grid-template-columns: max-content max-content;
-            grid-gap: 10px;
-            margin-top: 20px;
-            margin-left: 10px;
-        }
+    <section class="admin-main">
+        <div id="admin-users-panel" class="admin-panel">
+            <section class="metric-row" aria-label="User filters">
+                <button type="button" id="users-filter-all" class="stat-card admin-filter-card active" data-user-filter="all" aria-pressed="true">
+                    <div class="l">Users</div>
+                    <div class="n"><text-label id="users-total">0</text-label></div>
+                </button>
+                <button type="button" id="users-filter-active" class="stat-card admin-filter-card" data-user-filter="active" aria-pressed="false">
+                    <div class="l">Active</div>
+                    <div class="n"><text-label id="users-active-total">0</text-label></div>
+                </button>
+                <button type="button" id="users-filter-admins" class="stat-card admin-filter-card" data-user-filter="admins" aria-pressed="false">
+                    <div class="l">Admins</div>
+                    <div class="n"><text-label id="users-admin-total">0</text-label></div>
+                </button>
+                <button type="button" id="users-filter-svn" class="stat-card admin-filter-card" data-user-filter="svn" aria-pressed="false">
+                    <div class="l">SVN Passwords</div>
+                    <div class="n"><text-label id="users-svn-total">0</text-label></div>
+                </button>
+            </section>
 
-        .grid-layout span {
-            margin-top: 3px;
-            text-align: right;
-        }
-    </style>
+            <section class="card card-pad">
+                <div class="section-title" style="margin-top:0;">
+                    <div>
+                        <h2>User Management</h2>
+                        <div class="muted" id="users-filter-summary">Showing all users.</div>
+                    </div>
+                    <div class="toolbar" id="users-toolbar">
+                        <push-button id="users-new" class="btn-accent">New User</push-button>
+                        <push-button id="users-edit" disabled>Edit</push-button>
+                        <push-button id="users-delete" disabled>Delete</push-button>
+                    </div>
+                </div>
+                <div id="users-grid" style="width: 100%; height: calc(100vh - 410px); min-height: 360px;"></div>
+            </section>
+        </div>
 
-    <span>User Management</span>
+        <div id="admin-scan-panel" class="admin-panel" style="display:none;">
+            <section class="admin-action-panel">
+                <div>
+                    <h2>Scan Disk</h2>
+                    <p class="muted">Register SVN repositories that already exist under the server repository root but are not yet tracked by svn·hub.</p>
+                </div>
+                <push-button id="admin-scan-run" class="btn-accent">Scan Disk</push-button>
+                <div class="admin-scan-result" id="admin-scan-result" aria-live="polite"></div>
+            </section>
+        </div>
+    </section>
 
-    <div id="users-grid" style="margin-top: 10px; width: 100%; height: calc(100vh - 400px);"></div>
-
-    <div style="margin-top: 20px;">
-        <push-button id="users-new">New</push-button>
-        <push-button id="users-edit" class="space" disabled>Edit</push-button>
-        <push-button id="users-delete" class="space" disabled>Delete</push-button>
-    </div>
-
-    <popup id="users-edit-popup" height="420px" width="460px">
+    <popup id="users-edit-popup" height="470px" width="520px">
         <popup-title><text-label id="users-popup-title"></text-label></popup-title>
         <popup-body>
-            <div class="grid-layout">
-                <span>Login ID:</span>
-                <text-input id="users-user-name" style="width: 250px" maxlength="255" required></text-input>
+            <div style="padding:12px 14px;">
+                <div class="form-grid">
+                    <span>Login ID <span class="required-mark" aria-hidden="true">*</span></span>
+                    <text-input id="users-user-name" maxlength="255" required></text-input>
 
-                <span>Username:</span>
-                <text-input id="users-handle" style="width: 250px" maxlength="64" required></text-input>
+                    <span>Username <span class="required-mark" aria-hidden="true">*</span></span>
+                    <text-input id="users-handle" maxlength="64" required></text-input>
 
-                <span>Full Name:</span>
-                <text-input id="users-full-name" style="width: 250px" maxlength="200"></text-input>
+                    <span>Full name</span>
+                    <text-input id="users-full-name" maxlength="200"></text-input>
 
-                <span>Email:</span>
-                <text-input id="users-email" style="width: 250px" maxlength="200"></text-input>
+                    <span>Email</span>
+                    <text-input id="users-email" maxlength="200"></text-input>
 
-                <span>Login Password:</span>
-                <text-input id="users-password" style="width: 250px" maxlength="64" password></text-input>
+                    <span>Login password <span id="users-password-required" class="required-mark" aria-hidden="true">*</span></span>
+                    <text-input id="users-password" maxlength="64" password></text-input>
 
-                <span>SVN Password:</span>
-                <text-input id="users-svn-password" style="width: 250px" maxlength="64"></text-input>
+                    <span>SVN password</span>
+                    <text-input id="users-svn-password" maxlength="64"></text-input>
 
-                <span>Admin:</span>
-                <drop-down id="users-admin" style="width: 80px"></drop-down>
+                    <span>Admin</span>
+                    <check-box id="users-admin" class="toggle"></check-box>
 
-                <span>Active:</span>
-                <drop-down id="users-active" style="width: 80px"></drop-down>
-            </div>
-            <div style="margin-top: 20px; text-align: right;">
-                <push-button id="users-ok">OK</push-button>
-                <push-button id="users-cancel" style="margin-left: 10px; margin-right: 20px;">Cancel</push-button>
+                    <span>Active</span>
+                    <check-box id="users-active" class="toggle"></check-box>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:22px;">
+                    <push-button id="users-ok" class="btn-accent">Save</push-button>
+                    <push-button id="users-cancel">Cancel</push-button>
+                </div>
             </div>
         </popup-body>
     </popup>
-
 </div>

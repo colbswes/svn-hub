@@ -1,60 +1,239 @@
-<div>
-    <style>
-        .repo-head-bar { display: flex; align-items: center; gap: 14px; }
-        .repo-name { font-size: 20px; font-weight: 600; }
-        .repo-head-rev { color: #57606a; }
-        .repo-path-bar { margin: 10px 0; display: flex; align-items: center; gap: 10px; }
-        .repo-path { font-family: monospace; background: #f6f8fa; padding: 3px 8px; border-radius: 4px; }
-        .repo-section-title { font-weight: 600; margin: 16px 0 6px; }
-        .repo-render { border: 1px solid #d0d7de; border-radius: 6px; padding: 14px;
-                       max-height: 460px; overflow: auto; background: #fff; }
-        .code-render { font-family: monospace; white-space: pre; overflow: auto; max-height: 60vh;
-                       border: 1px solid #d0d7de; border-radius: 6px; padding: 10px; background: #fff; }
-    </style>
+<div class="page-shell wrap-wide repo-workspace">
+    <header class="repo-headline">
+        <push-button id="back" class="repo-back btn-sm">&larr; Back</push-button>
+        <div class="repo-headline-main">
+            <div class="repo-id-line">
+                <span class="repo-id-owner"><button type="button" class="repo-owner-link" id="repo-owner-link"><text-label id="repo-owner"></text-label></button></span>
+                <span class="repo-id-sep">/</span>
+                <h1 class="repo-id-name"><text-label id="repo-title"></text-label></h1>
+                <span class="chip repo-vis-chip"><text-label id="repo-visibility"></text-label></span>
+                <span class="rev-pill mono"><text-label id="repo-head"></text-label></span>
+            </div>
+            <p class="repo-subhead" id="repo-subhead"></p>
+        </div>
+        <div class="repo-header-actions" id="repo-header-actions" hidden>
+            <push-button id="repo-edit-btn" class="btn-sm">Edit</push-button>
+            <push-button id="repo-access-btn" class="btn-sm">Access</push-button>
+        </div>
+        <button type="button" id="checkout-btn" class="checkout-box repo-checkout-copy" aria-label="Copy SVN checkout command">
+            <span class="protocol">SVN</span>
+            <span class="url mono" id="repo-checkout-display"></span>
+            <span class="checkout-feedback" id="checkout-feedback" aria-live="polite">
+                <span class="checkout-check">✓</span>
+                <span id="checkout-feedback-text">Copied</span>
+            </span>
+        </button>
+    </header>
 
-    <div class="repo-head-bar">
-        <push-button id="back">&larr; Repositories</push-button>
-        <span class="repo-name"><text-label id="repo-title"></text-label></span>
-        <span class="repo-head-rev"><text-label id="repo-head"></text-label></span>
-        <span style="margin-left:auto;">
-            <push-button id="go-issues">Issues</push-button>
-            <push-button id="go-mrs" style="margin-left:8px;">Merge Requests</push-button>
-        </span>
+    <section class="card card-pad repo-overview">
+        <dl class="fact-list fact-grid repo-overview-facts">
+            <div class="fact"><dt>HEAD</dt><dd class="mono" id="fact-head"><span class="sk"></span></dd></div>
+            <div class="fact"><dt>Branches</dt><dd id="fact-branches"><span class="sk"></span></dd></div>
+            <div class="fact"><dt>Tags</dt><dd id="fact-tags"><span class="sk"></span></dd></div>
+            <div class="fact"><dt>Files</dt><dd id="fact-files"><span class="sk"></span></dd></div>
+            <div class="fact"><dt>Size</dt><dd id="fact-size"><span class="sk"></span></dd></div>
+            <div class="fact"><dt>Issues</dt><dd id="fact-issues"><span class="sk"></span></dd></div>
+            <div class="fact"><dt>Merge requests</dt><dd id="fact-mrs"><span class="sk"></span></dd></div>
+            <div class="fact"><dt>Created</dt><dd id="fact-created"><span class="sk"></span></dd></div>
+        </dl>
+    </section>
+
+    <div class="repo-detail-layout">
+        <aside class="side-rail repo-rail">
+            <section class="card card-pad">
+                <div class="eyebrow">Sections</div>
+                <nav class="side-nav" style="margin-top:12px;" aria-label="Repository sections">
+                    <button type="button" class="side-nav-btn" id="go-files"><span class="side-nav-label">Files</span></button>
+                    <button type="button" class="side-nav-btn" id="go-readme"><span class="side-nav-label">README</span></button>
+                    <button type="button" class="side-nav-btn" id="go-history"><span class="side-nav-label">History</span></button>
+                    <button type="button" class="side-nav-btn" id="go-issues"><span class="side-nav-label">Issues</span><span class="side-nav-count" id="count-issues" hidden></span></button>
+                    <button type="button" class="side-nav-btn" id="go-mrs"><span class="side-nav-label">Merge Requests</span><span class="side-nav-count" id="count-mrs" hidden></span></button>
+                    <button type="button" class="side-nav-btn" id="go-insights"><span class="side-nav-label">Insights</span></button>
+                </nav>
+            </section>
+
+            <section class="card card-pad repo-contributors-card">
+                <div class="section-title">
+                    <div>
+                        <h2>Top contributors</h2>
+                        <div class="muted">Who lands revisions here</div>
+                    </div>
+                </div>
+                <div id="about-contributors" class="contrib-list"></div>
+            </section>
+        </aside>
+
+        <main style="min-width:0;">
+            <section class="card card-pad repo-view" id="view-history" style="display:none;">
+                <div id="rev-feed-wrap">
+                    <div class="section-title" style="margin-top:0;">
+                        <div>
+                            <h2>Revision history</h2>
+                            <div class="muted">The central line — every change is a sequential, global revision.</div>
+                        </div>
+                        <span class="chip chip-copper"><text-label id="rev-count"></text-label></span>
+                    </div>
+                    <div id="revision-feed" class="revision-spine"></div>
+                </div>
+                <div id="rev-viewer" style="display:none;">
+                    <div class="file-viewer-toolbar rev-viewer-toolbar">
+                        <push-button id="rev-back" class="btn-sm">&larr; History</push-button>
+                        <div class="file-viewer-title">
+                            <div class="eyebrow">Revision</div>
+                            <h2 id="rev-title"></h2>
+                            <div class="file-meta" id="rev-meta"></div>
+                        </div>
+                    </div>
+                    <div class="rev-message" id="rev-message"></div>
+                    <div id="rev-diff-host" class="rev-diff-host"></div>
+                </div>
+            </section>
+
+            <section class="card card-pad repo-view repo-files-panel" id="view-files" style="display:none;">
+                <div class="browse-toolbar">
+                    <nav class="crumbs" id="browse-crumb" aria-label="Current path"></nav>
+                    <div class="root-chips" role="group" aria-label="Jump to root">
+                        <button type="button" class="root-chip mono" id="root-trunk">trunk</button>
+                        <button type="button" class="root-chip mono" id="root-branches">branches</button>
+                        <button type="button" class="root-chip mono" id="root-tags">tags</button>
+                    </div>
+                </div>
+                <div id="browse-grid" class="browse-grid-host" style="width: 100%; margin-top: 12px;"></div>
+                <div id="file-viewer" class="file-viewer" style="display:none;">
+                    <div class="file-viewer-toolbar">
+                        <push-button id="file-back" class="btn-sm file-back">&larr; Files</push-button>
+                        <div class="file-viewer-title">
+                            <div class="eyebrow">File</div>
+                            <h2 id="file-title"></h2>
+                            <div class="file-meta mono" id="file-meta"></div>
+                        </div>
+                        <push-button id="file-raw" class="btn-sm">View raw</push-button>
+                    </div>
+                    <div class="file-viewer-body" id="file-viewer-body">
+                        <pre class="file-viewer-code"><code id="file-content"></code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card card-pad repo-view" id="view-readme" style="display:none;">
+                <div class="section-title" style="margin-top:0;">
+                    <h2>README</h2>
+                </div>
+                <div class="repo-render repo-readme-render"><text-label id="readme"></text-label></div>
+            </section>
+
+            <section class="repo-view" id="view-embed" style="display:none;">
+                <div id="repo-embed-host"></div>
+            </section>
+        </main>
     </div>
 
-    <div class="repo-path-bar">
-        <span>Path:</span>
-        <span class="repo-path"><text-label id="crumb"></text-label></span>
-        <push-button id="up">Up</push-button>
-    </div>
-
-    <div id="browse-grid" style="width: 100%; height: 300px;"></div>
-
-    <div class="repo-section-title">README</div>
-    <div class="repo-render"><text-label id="readme"></text-label></div>
-
-    <div class="repo-section-title">Recent commits</div>
-    <div id="commits-grid" style="width: 100%; height: 220px;"></div>
-
-    <!-- File view popup -->
-    <popup id="file-popup" width="900px" height="640px">
-        <popup-title><text-label id="fp-title"></text-label></popup-title>
+    <popup id="repo-edit-popup" width="520px" height="640px">
+        <popup-title>Edit repository</popup-title>
         <popup-body>
-            <div class="code-render"><text-label id="fp-content"></text-label></div>
-            <div style="margin-top: 12px; text-align: right;">
-                <push-button id="fp-close">Close</push-button>
+            <div class="modal-pad">
+                <div class="field">
+                    <label for="re-name">Display name <span class="req">*</span></label>
+                    <text-input id="re-name" style="width: 100%" required></text-input>
+                    <div class="field-error" id="re-name-err"></div>
+                    <div class="muted" style="font-size:12px;">This changes the display name only. The SVN URL stays the same.</div>
+                </div>
+                <div class="field" style="margin-top:16px;">
+                    <label for="re-desc">Description</label>
+                    <text-input id="re-desc" style="width: 100%"></text-input>
+                </div>
+                <div class="field" style="margin-top:16px;">
+                    <label for="re-default-branch">Default branch</label>
+                    <text-input id="re-default-branch" style="width: 100%"></text-input>
+                </div>
+                <div class="field" style="margin-top:16px;">
+                    <label>Visibility</label>
+                    <div class="vis-options">
+                        <label class="vis-opt" for="re-vis-private">
+                            <radio-button group="re-vis" id="re-vis-private" value="private">Private</radio-button>
+                            <span class="vis-opt-desc">Only people you grant access can browse or check out.</span>
+                        </label>
+                        <label class="vis-opt" for="re-vis-public">
+                            <radio-button group="re-vis" id="re-vis-public" value="public">Public checkout</radio-button>
+                            <span class="vis-opt-desc">Anyone on this server can browse and check out the repository.</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="repo-form-url">
+                    <span>SVN URL</span>
+                    <code id="re-svn-url"></code>
+                </div>
+                <div class="modal-actions">
+                    <push-button id="re-cancel">Cancel</push-button>
+                    <push-button id="re-submit" class="btn-accent">Save</push-button>
+                </div>
             </div>
         </popup-body>
     </popup>
 
-    <!-- Revision / diff popup -->
-    <popup id="rev-popup" width="980px" height="700px">
-        <popup-title><text-label id="rev-title"></text-label></popup-title>
+    <popup id="repo-access-popup" width="640px" height="660px">
+        <popup-title>
+            <text-label id="acc-title"></text-label>
+            <button type="button" class="popup-icon-close" id="acc-modal-close" aria-label="Close access modal">×</button>
+        </popup-title>
         <popup-body>
-            <div style="margin-bottom: 8px;"><text-label id="rev-info"></text-label></div>
-            <div class="repo-render" style="max-height: 520px;"><text-label id="rev-diff"></text-label></div>
-            <div style="margin-top: 10px; text-align: right;">
-                <push-button id="rev-close">Close</push-button>
+            <div class="acc-stage" id="acc-stage">
+                <div class="acc-pane acc-pane-list" id="acc-pane-list">
+                    <div class="acc-list-head">
+                        <div>
+                            <div class="acc-list-title">People with access</div>
+                            <div class="muted acc-list-sub" id="acc-count"></div>
+                        </div>
+                        <button type="button" class="acc-add-btn" id="acc-add-btn">
+                            <span class="acc-add-plus" aria-hidden="true">+</span> Add user
+                        </button>
+                    </div>
+                    <div class="acc-people" id="acc-people"></div>
+                    <div class="acc-foot">
+                        <push-button id="acc-close">Done</push-button>
+                    </div>
+                </div>
+
+                <div class="acc-pane acc-pane-edit" id="acc-pane-edit">
+                    <button type="button" class="acc-back" id="acc-back">&larr; Back to list</button>
+                    <div class="acc-edit-title" id="acc-edit-title">Add a user</div>
+
+                    <div class="field acc-search-field" id="acc-search-field">
+                        <label for="acc-search">Find a user</label>
+                        <input type="text" id="acc-search" class="acc-search-input"
+                               placeholder="Search by username or name…" autocomplete="off" spellcheck="false">
+                        <div class="acc-results" id="acc-results"></div>
+                    </div>
+
+                    <div class="acc-chosen" id="acc-chosen" hidden>
+                        <span class="acc-av" id="acc-chosen-av"></span>
+                        <div class="acc-chosen-names">
+                            <div class="acc-chosen-name" id="acc-chosen-name"></div>
+                            <div class="muted acc-chosen-handle" id="acc-chosen-handle"></div>
+                        </div>
+                        <button type="button" class="acc-change" id="acc-change">Change</button>
+                    </div>
+
+                    <div class="acc-perms" id="acc-perms">
+                        <div class="acc-perm">
+                            <check-box id="acc-read">Read</check-box>
+                            <div class="acc-perm-desc">Browse the repository and check it out.</div>
+                        </div>
+                        <div class="acc-perm">
+                            <check-box id="acc-write">Write</check-box>
+                            <div class="acc-perm-desc">Commit changes and create branches and tags.</div>
+                        </div>
+                        <div class="acc-perm">
+                            <check-box id="acc-admin">Admin</check-box>
+                            <div class="acc-perm-desc">Manage settings and who has access.</div>
+                        </div>
+                    </div>
+
+                    <div class="acc-edit-actions">
+                        <push-button id="acc-remove">Remove access</push-button>
+                        <push-button id="acc-grant" class="btn-accent">Grant access</push-button>
+                    </div>
+                </div>
             </div>
         </popup-body>
     </popup>

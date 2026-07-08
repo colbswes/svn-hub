@@ -1,39 +1,133 @@
-<div class="center">
-    <div style="display: inline-block; text-align: center;">
-        <h1>Svn-Hub</h1>
-        <div style="margin-bottom: 18px; color: #57606a;">Public Subversion hosting, with real checkout/update insight</div>
-
-        <div style="margin-bottom: 24px;">
-            <push-button id="why-button" style="font-size: 18px; padding: 12px 30px;">Why this service exists</push-button>
+<div class="auth-shell">
+    <aside class="auth-panel">
+        <div class="brand">
+            <img class="brand-mark" src="assets/svnhub-mark.svg" alt="" aria-hidden="true">
+            <span class="wordmark">svn<span class="dot"></span>hub</span>
         </div>
 
-        <form onsubmit="return false;" autocomplete="on">
-            <div style="display: inline-block; width: 100px; text-align: right; margin-right: 10px;">Email:</div>
-            <text-input id="username" required autocomplete="username"></text-input>
-
-            <br>
-
-            <div style="display: inline-block; width: 100px; text-align: right; margin-right: 10px;">Password:</div>
-            <text-input id="password" style="margin-top: 20px;" required password autocomplete="current-password"></text-input>
-
-            <br>
-
-            <push-button id="login" style="margin-top: 20px;">Login</push-button>
-        </form>
-        <div style="margin-top: 16px;">
-            <push-button id="to-register">Create an account</push-button>
+        <div class="auth-panel-body">
+            <div class="auth-copy">
+                <div class="eyebrow">Centralized source control</div>
+                <h1>Version control, the Subversion way.</h1>
+                <p>One canonical repository. One official project history. A clear sequence of global revisions that stays easy to audit, explain, and restore.</p>
+                <div class="auth-fact-list">
+                    <div class="auth-fact"><span>r#</span><p>Stable revision numbers name the whole repository, not a moving local graph.</p></div>
+                    <div class="auth-fact"><span>co</span><p>Partial checkout lets teams work on the folder they need, even inside very large repositories.</p></div>
+                    <div class="auth-fact"><span>lk</span><p>Exclusive locks protect binary and design assets from silent overwrites.</p></div>
+                </div>
+                <p>Built for teams that value simplicity, governance, practical statistics, and long-term control.</p>
+            </div>
         </div>
-        <div style="margin-top: 10px;">
-            <push-button id="to-forgot">Forgot password?</push-button>
-        </div>
+    </aside>
 
-        <div style="margin-top: 28px; font-size: 12px; color: #57606a;">
-            <a href="https://github.com/blakemcbride/svn-hub" target="_blank" rel="noopener noreferrer"
-               style="color: #57606a;">Svn-Hub on GitHub</a>
-            &nbsp;&middot;&nbsp;
-            built on the
-            <a href="https://github.com/blakemcbride/Kiss" target="_blank" rel="noopener noreferrer"
-               style="color: #57606a;">Kiss framework</a>
+    <main id="auth-form-wrap" class="auth-form-wrap">
+        <div class="auth-card-stage" aria-live="polite">
+            <section id="signin-panel" class="auth-card auth-view auth-view-signin" data-auth-panel="signin">
+                <div class="eyebrow">Sign in</div>
+                <h1 class="wordmark">svn<span class="dot"></span>hub</h1>
+                <p class="muted auth-intro">Public Subversion hosting, with real checkout/update insight.</p>
+
+                <form class="auth-form" onsubmit="return false;" autocomplete="on">
+                    <div class="field">
+                        <label for="username">Email</label>
+                        <text-input id="username" required autocomplete="username"></text-input>
+                    </div>
+
+                    <div class="field">
+                        <label for="password">Password</label>
+                        <text-input id="password" required password autocomplete="current-password"></text-input>
+                    </div>
+
+                    <div class="auth-actions">
+                        <push-button id="login" class="btn-accent">Sign in</push-button>
+                    </div>
+                </form>
+
+                <div class="auth-foot">
+                    <push-button id="to-register" class="btn-sm btn-quiet auth-text-button">Create an account</push-button>
+                    <push-button id="to-forgot" class="btn-sm btn-quiet auth-text-button">Forgot password?</push-button>
+                </div>
+
+                <div class="auth-secondary-foot">
+                    <push-button id="why-button" class="btn-sm btn-quiet auth-text-button">Why this service exists</push-button>
+                </div>
+
+                <div class="auth-link-foot">
+                    <a href="https://github.com/blakemcbride/svn-hub" target="_blank" rel="noopener noreferrer"><span class="wordmark">svn<span class="dot"></span>hub</span> on GitHub</a>
+                    <span>&nbsp;·&nbsp;</span>
+                    <a href="https://github.com/blakemcbride/Kiss" target="_blank" rel="noopener noreferrer">Kiss framework</a>
+                </div>
+            </section>
+
+            <section id="register-panel" class="auth-card auth-view auth-slide-panel" data-auth-panel="register" aria-hidden="true" inert>
+                <div class="auth-panel-topline">
+                    <push-button id="back-from-register" class="btn-sm btn-quiet auth-back-button">← Back to sign-in</push-button>
+                </div>
+
+                <div class="eyebrow">New account</div>
+                <h1>Create your account</h1>
+                <p class="muted auth-intro">Your repositories live under one URL-safe handle.</p>
+
+                <form class="auth-form" onsubmit="return false;" autocomplete="on">
+                    <div class="field">
+                        <label for="reg-email">Email</label>
+                        <text-input id="reg-email" required autocomplete="username" maxlength="255"></text-input>
+                    </div>
+
+                    <div class="field">
+                        <label for="reg-handle">Username</label>
+                        <text-input id="reg-handle" required maxlength="64" autocomplete="off"></text-input>
+                    </div>
+
+                    <div class="field">
+                        <label for="reg-full-name">Full name</label>
+                        <text-input id="reg-full-name" maxlength="200"></text-input>
+                    </div>
+
+                    <div class="field">
+                        <label for="reg-password">Password</label>
+                        <text-input id="reg-password" required password autocomplete="new-password"></text-input>
+                    </div>
+
+                    <div class="field">
+                        <label for="reg-password2">Confirm</label>
+                        <text-input id="reg-password2" required password autocomplete="new-password"></text-input>
+                    </div>
+
+                    <div class="auth-actions">
+                        <push-button id="register" class="btn-accent">Create account</push-button>
+                    </div>
+                </form>
+
+                <div class="passkey-hint">
+                    Usernames may contain letters, digits, dash, and underscore. No spaces.
+                </div>
+            </section>
+
+            <section id="forgot-panel" class="auth-card auth-view auth-slide-panel" data-auth-panel="forgot" aria-hidden="true" inert>
+                <div class="auth-panel-topline">
+                    <push-button id="back-from-forgot" class="btn-sm btn-quiet auth-back-button">← Back to sign-in</push-button>
+                </div>
+
+                <div class="eyebrow">Forgot password</div>
+                <h1>Send a reset code</h1>
+                <p class="muted auth-intro">Enter your email address and check your inbox for a 6-digit code.</p>
+
+                <form class="auth-form" onsubmit="return false;" autocomplete="off">
+                    <div class="field">
+                        <label for="reset-email">Email</label>
+                        <text-input id="reset-email" required maxlength="255" autocomplete="username"></text-input>
+                    </div>
+
+                    <div class="auth-actions">
+                        <push-button id="send-code" class="btn-accent">Send code</push-button>
+                    </div>
+                </form>
+
+                <div class="auth-status-message">
+                    <text-label id="sent-msg"></text-label>
+                </div>
+            </section>
         </div>
-    </div>
+    </main>
 </div>

@@ -16,13 +16,28 @@ class KissInit {
 
         MainServlet.readIniFile "application.ini", "main"
 
-        // The ONLY methods callable without a session — necessarily so, because the
-        // user has no account/session yet (the same reason Login itself is exempt):
-        // self-registration and requesting a password-reset code.  Every other
-        // service is validated by the framework.  Setting a new password is done by
-        // the *authenticated* AccountService.changePassword after signing in.
+        // Authentication bootstrap.
         MainServlet.allowWithoutAuthentication("services.Register", "register")
         MainServlet.allowWithoutAuthentication("services.PasswordResetService", "requestReset")
+
+        // Public read-only browsing.  The service methods still enforce repository
+        // visibility through RepoAccess, so private repositories remain closed.
+        MainServlet.allowWithoutAuthentication("services.DiscoverService", "searchUsers")
+        MainServlet.allowWithoutAuthentication("services.DiscoverService", "searchRepos")
+        MainServlet.allowWithoutAuthentication("services.DiscoverService", "getProfile")
+        MainServlet.allowWithoutAuthentication("services.RepositoryService", "getRepository")
+        MainServlet.allowWithoutAuthentication("services.BrowseService", "listDir")
+        MainServlet.allowWithoutAuthentication("services.BrowseService", "cat")
+        MainServlet.allowWithoutAuthentication("services.BrowseService", "readme")
+        MainServlet.allowWithoutAuthentication("services.HistoryService", "log")
+        MainServlet.allowWithoutAuthentication("services.HistoryService", "revisionDetail")
+        MainServlet.allowWithoutAuthentication("services.HistoryService", "diff")
+        MainServlet.allowWithoutAuthentication("services.StatsService", "repoFacts")
+        MainServlet.allowWithoutAuthentication("services.IssueService", "list")
+        MainServlet.allowWithoutAuthentication("services.IssueService", "get")
+        MainServlet.allowWithoutAuthentication("services.MergeRequestService", "list")
+        MainServlet.allowWithoutAuthentication("services.MergeRequestService", "get")
+        MainServlet.allowWithoutAuthentication("services.MergeRequestService", "diffPreview")
 
         // Set up a global logout handler that runs whenever any user logs out
         // This can be used for cleanup tasks like logging, closing resources, etc.

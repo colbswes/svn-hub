@@ -6,7 +6,7 @@
 (function () {
 
     // The reset code the user just signed in with authorizes the change.
-    const code = Utils.getData('resetCredential');
+    const code = Utils.getData('resetCredential') || '';
 
     async function setPassword() {
         if ($$('password').isError('New password'))
@@ -28,6 +28,7 @@
         });
         if (res._Success) {
             Utils.saveData('resetCredential', null);
+            Utils.toast.success('Password set');
             await Utils.showMessage('Password set', 'Your new password is ready. Please sign in.');
             Server.logout();   // clears the temporary session; returns to the login page
         }

@@ -1,52 +1,162 @@
-<div>
-    <style>
-        .iss-bar { display: flex; align-items: center; gap: 12px; }
-        .iss-title { font-size: 18px; font-weight: 600; }
-        .cmt { border-top: 1px solid #eaecef; padding: 8px 0; }
-        .cmt .meta { color: #57606a; font-size: 12px; margin-bottom: 4px; }
-        .render { border: 1px solid #d0d7de; border-radius: 6px; padding: 10px; background: #fff; }
-    </style>
+<style>
+    .issue-list {
+        display: flex;
+        flex-direction: column;
+    }
+    .issue-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+        padding: 15px 6px;
+        border-top: 1px solid var(--rule);
+        cursor: pointer;
+        transition: background-color 120ms ease;
+    }
+    .issue-row:first-child {
+        border-top: 0;
+    }
+    .issue-row:hover {
+        background: rgba(68, 90, 168, 0.05);
+    }
+    .issue-status {
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        margin-top: 1px;
+        border-radius: 50%;
+    }
+    .issue-status svg {
+        display: block;
+    }
+    .issue-status.open {
+        color: var(--copper-deep);
+    }
+    .issue-status.closed {
+        color: var(--ok);
+    }
+    .issue-body {
+        min-width: 0;
+        flex: 1;
+    }
+    .issue-title-line {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        flex-wrap: wrap;
+    }
+    .issue-num {
+        color: var(--ink-4);
+        font-family: var(--mono);
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+    .issue-title {
+        color: var(--ink);
+        font-family: var(--display);
+        font-size: 15.5px;
+        font-weight: 700;
+    }
+    .issue-meta {
+        margin-top: 5px;
+        color: var(--ink-3);
+        font-size: 12.5px;
+    }
+    .issue-comments {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--ink-4);
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+    .issue-comments svg {
+        display: block;
+    }
+    .issue-empty {
+        margin: 0;
+    }
+</style>
+<div class="page-shell wrap-wide">
+    <div id="iss-view-list">
+        <header class="page-header">
+            <div class="page-title-block">
+                <div class="eyebrow">Repository issues</div>
+                <h1>Issues - <text-label id="iss-repo"></text-label></h1>
+                <div class="lead">Track problems and decisions against the central repository.</div>
+            </div>
+            <div class="toolbar">
+                <push-button id="iss-back">Repository</push-button>
+                <div class="root-chips ticket-status-filter" id="iss-filter" role="group" aria-label="Filter issues by status">
+                    <button type="button" class="root-chip active" data-status="open" aria-pressed="true">Open</button>
+                    <button type="button" class="root-chip" data-status="closed" aria-pressed="false">Closed</button>
+                    <button type="button" class="root-chip" data-status="" aria-pressed="false">All</button>
+                </div>
+                <push-button id="iss-new" class="btn-accent">New Issue</push-button>
+            </div>
+        </header>
 
-    <div class="iss-bar">
-        <push-button id="iss-back">&larr; Repository</push-button>
-        <span class="iss-title">Issues — <text-label id="iss-repo"></text-label></span>
-        <drop-down id="iss-filter" style="width: 130px;"></drop-down>
-        <push-button id="iss-new">New Issue</push-button>
+        <section class="card card-pad">
+            <div id="iss-list" class="issue-list"></div>
+        </section>
     </div>
 
-    <div id="iss-grid" style="width: 100%; height: calc(100vh - 260px); margin-top: 12px;"></div>
+    <div id="iss-view-detail" style="display:none;">
+        <div class="ticket-topbar">
+            <push-button id="id-back" class="btn-sm">&larr; Issues</push-button>
+            <div class="ticket-actions">
+                <push-button id="id-toggle">Close issue</push-button>
+            </div>
+        </div>
+        <header class="ticket-head">
+            <h1 class="ticket-title"><span class="ticket-num mono" id="id-num"></span><span id="id-title"></span></h1>
+            <div class="ticket-meta" id="id-meta"></div>
+        </header>
+        <section class="card ticket-body-card">
+            <div class="ticket-md" id="id-body"></div>
+        </section>
+        <section class="ticket-thread">
+            <div class="ticket-thread-title">
+                <h3>Comments</h3>
+                <span class="chip" id="id-comment-count">0</span>
+            </div>
+            <div class="ticket-comments" id="id-comments"></div>
+            <div class="ticket-composer" id="id-composer">
+                <label class="ticket-composer-label" for="id-newcomment">Add a comment</label>
+                <textbox-input id="id-newcomment" style="width: 100%; height: 96px;"></textbox-input>
+                <div class="ticket-composer-actions">
+                    <push-button id="id-comment" class="btn-accent">Comment</push-button>
+                </div>
+            </div>
+        </section>
+    </div>
 
-    <popup id="iss-new-popup" width="560px" height="420px">
-        <popup-title>New Issue</popup-title>
-        <popup-body>
-            <div style="margin: 8px;">
-                <div>Title:</div>
-                <text-input id="in-title" style="width: 460px" required></text-input>
-                <div style="margin-top: 8px;">Description (markdown):</div>
-                <textbox-input id="in-body" style="width: 460px; height: 200px;"></textbox-input>
+    <div id="iss-view-new" style="display:none;">
+        <div class="ticket-topbar">
+            <push-button id="in-back" class="btn-sm">&larr; Issues</push-button>
+        </div>
+        <section class="card card-pad ticket-compose">
+            <div class="section-title" style="margin-top:0;">
+                <div>
+                    <h2>New issue</h2>
+                    <div class="muted">Describe the problem or decision; markdown is supported.</div>
+                </div>
             </div>
-            <div style="margin: 12px 8px; text-align: right;">
-                <push-button id="in-ok">Create</push-button>
-                <push-button id="in-cancel" style="margin-left: 10px;">Cancel</push-button>
+            <div class="field">
+                <label for="in-title">Title</label>
+                <text-input id="in-title" style="width: 100%;" required></text-input>
             </div>
-        </popup-body>
-    </popup>
-
-    <popup id="iss-detail-popup" width="760px" height="640px">
-        <popup-title><text-label id="id-title"></text-label></popup-title>
-        <popup-body>
-            <div style="margin-bottom: 6px;"><text-label id="id-meta"></text-label></div>
-            <div class="render"><text-label id="id-body"></text-label></div>
-            <div style="font-weight: 600; margin: 12px 0 4px;">Comments</div>
-            <div class="render" style="max-height: 220px; overflow: auto;"><text-label id="id-comments"></text-label></div>
-            <div style="margin-top: 10px;">
-                <textbox-input id="id-newcomment" style="width: 660px; height: 70px;"></textbox-input>
+            <div class="field" style="margin-top:12px;">
+                <label for="in-body">Description (markdown)</label>
+                <textbox-input id="in-body" style="width: 100%; height: 240px;"></textbox-input>
             </div>
-            <div style="margin-top: 10px; text-align: right;">
-                <push-button id="id-comment">Comment</push-button>
-                <push-button id="id-toggle" style="margin-left: 8px;">Close issue</push-button>
-                <push-button id="id-close" style="margin-left: 8px;">Done</push-button>
+            <div class="ticket-composer-actions" style="margin-top:14px;">
+                <push-button id="in-cancel">Cancel</push-button>
+                <push-button id="in-ok" class="btn-accent">Create issue</push-button>
             </div>
-        </popup-body>
-    </popup>
+        </section>
+    </div>
 </div>

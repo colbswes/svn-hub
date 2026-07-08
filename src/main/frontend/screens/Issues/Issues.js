@@ -1,13 +1,14 @@
-/* global $$, Utils, Server, AGGrid, DateTimeUtils, marked */
+/* global $$, Utils, Server, DateTimeUtils, marked */
 'use strict';
 
 (async function () {
 
     const WS = 'services/IssueService';
+    const guest = Utils.getData('guest') === true;
     const repoId = Utils.getData('repoId');
     const repoName = Utils.getData('repoName');
     if (!repoId) {
-        Utils.loadPage('screens/Repositories/Repositories', 'app-screen-area');
+        Utils.routePage(guest ? 'screens/Discover/Discover' : 'screens/Dashboard/Dashboard', 'app-screen-area');
         return;
     }
     let current = null;   // currently open issue number
@@ -30,102 +31,282 @@
 
     $$('iss-repo').setValue(repoName || ('#' + repoId));
     $$('iss-back').onclick(() => {
-        Utils.cleanup();
-        Utils.loadPage('screens/Repository/Repository', 'app-screen-area');
+        Utils.routePage('screens/Repository/Repository', 'app-screen-area');
     });
 
-    $$('iss-filter').clear();
-    $$('iss-filter').add('open', 'Open');
-    $$('iss-filter').add('closed', 'Closed');
-    $$('iss-filter').add('', 'All');
-    $$('iss-filter').setValue('open');
-    $$('iss-filter').onChange(loadList);
-
-    const grid = new AGGrid('iss-grid', [
-        {headerName: '#', field: 'number', width: 70},
-        {headerName: 'Title', field: 'title', flex: 3},
-        {headerName: 'Status', field: 'status', width: 100},
-        {headerName: 'By', field: 'createdby', width: 120},
-        {headerName: 'Comments', field: 'comments', width: 110},
-        {headerName: 'Created', field: 'createdStr', flex: 1}
-    ], 'number');
-    grid.show();
-    grid.setOnRowDoubleClicked(() => {
-        const row = grid.getSelectedRow();
-        if (row)
-            openIssue(row.number);
+    let issueFilter = 'open';
+    const issueFilterEl = document.getElementById('iss-filter');
+    function setIssueFilter(status, reload = true) {
+        issueFilter = status || '';
+        issueFilterEl.querySelectorAll('.root-chip').forEach((btn) => {
+            const active = (btn.getAttribute('data-status') || '') === issueFilter;
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        if (reload)
+            loadList();
+    }
+    issueFilterEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('.root-chip');
+        if (btn)
+            setIssueFilter(btn.getAttribute('data-status') || '');
     });
+    setIssueFilter(issueFilter, false);
 
-    async function loadList() {
-        grid.clear();
-        const res = await Server.call(WS, 'list', {repoId: repoId, status: $$('iss-filter').getValue()});
-        if (res._Success)
-            grid.addRecords(res.rows.map((r) => Object.assign({}, r, {createdStr: fmtDate(r.createdts)})));
+    const listHost = document.getElementById('iss-list');
+
+    // ---- views: the list, an in-place issue detail, and an in-place composer.
+    // Which one shows is mirrored in a ?issue= query param (a number, or "new"),
+    // pushed to browser history so Back/Forward walk through list <-> detail and
+    // deep links restore the exact view. The state keeps whatever the host
+    // Repository screen put there (__repoSection etc.) so its popstate handling
+    // still restores the Issues section first.
+    const VIEWS = {list: 'iss-view-list', detail: 'iss-view-detail', compose: 'iss-view-new'};
+    function showView(name) {
+        Object.keys(VIEWS).forEach((k) => {
+            const el = document.getElementById(VIEWS[k]);
+            if (el)
+                el.style.display = k === name ? '' : 'none';
+        });
     }
 
-    // New issue
-    $$('iss-new').onclick(() => {
+    function issueUrl(val) {
+        const url = new URL(location.href);
+        if (val == null || val === '')
+            url.searchParams.delete('issue');
+        else
+            url.searchParams.set('issue', val);
+        return url.pathname + url.search + url.hash;
+    }
+    function writeIssueHistory(val, mode = 'push') {
+        try {
+            const url = issueUrl(val);
+            const currentUrl = location.pathname + location.search + location.hash;
+            if (mode !== 'replace' && url === currentUrl)
+                return;
+            const state = Object.assign({}, history.state || {}, {__issue: val == null ? '' : String(val)});
+            history[mode === 'replace' ? 'replaceState' : 'pushState'](state, '', url);
+        } catch (e) { /* history not available */ }
+    }
+
+    async function showList(historyMode = null) {
+        if (historyMode)
+            writeIssueHistory(null, historyMode);
+        showView('list');
+        await loadList();
+    }
+
+    // Re-open whatever the URL names. Called on load, on Back/Forward, and when
+    // the Repository screen re-shows an already-loaded Issues embed.
+    async function syncFromUrl() {
+        if (!document.getElementById('iss-list'))
+            return;                                   // this screen has been replaced
+        const params = new URLSearchParams(location.search || '');
+        const section = params.get('section');
+        if (section && section !== 'issues')
+            return;                                   // another repo section owns the view
+        const v = params.get('issue') || '';
+        if (v === 'new' && !guest)
+            showCompose(false);
+        else if (/^\d+$/.test(v))
+            await openIssue(Number(v), {writeHistory: false});
+        else
+            await showList();
+    }
+    // Only one such listener pair is ever registered (each load removes the last).
+    let syncQueued = false;
+    function queueSync() {
+        if (syncQueued)
+            return;
+        syncQueued = true;
+        setTimeout(() => {
+            syncQueued = false;
+            syncFromUrl();
+        }, 0);
+    }
+    if (window.__issuesViewSync) {
+        window.removeEventListener('repo-embed-sync', window.__issuesViewSync);
+        window.removeEventListener('popstate', window.__issuesViewSync);
+    }
+    window.__issuesViewSync = queueSync;
+    window.addEventListener('repo-embed-sync', window.__issuesViewSync);
+    window.addEventListener('popstate', window.__issuesViewSync);
+
+    // status glyphs — open ring (copper) vs. closed check (green)
+    const ICON_OPEN = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+        '<circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>' +
+        '<circle cx="8" cy="8" r="2" fill="currentColor"/></svg>';
+    const ICON_CLOSED = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+        '<circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>' +
+        '<path d="M5.4 8.2l1.8 1.8L10.8 6" stroke="currentColor" stroke-width="1.5" ' +
+        'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const ICON_COMMENT = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+        '<path d="M2.5 3.5h11v7h-6l-3 2.2V10.5h-2z" stroke="currentColor" stroke-width="1.3" ' +
+        'stroke-linejoin="round"/></svg>';
+
+    function issueRow(r) {
+        const closed = ('' + r.status).toLowerCase() === 'closed';
+        const createdBy = r.createdBy || r.createdby;
+        const created = fmtDate(r.createdTs || r.createdts);
+        const comments = Number(r.comments) || 0;
+        const meta = 'opened by ' + esc(createdBy || 'unknown') +
+            (created ? ' &middot; ' + esc(created) : '');
+        return '<article class="issue-row" data-number="' + esc(r.number) + '" tabindex="0">' +
+            '<span class="issue-status ' + (closed ? 'closed' : 'open') + '" title="' +
+                (closed ? 'Closed' : 'Open') + '">' + (closed ? ICON_CLOSED : ICON_OPEN) + '</span>' +
+            '<div class="issue-body">' +
+                '<div class="issue-title-line">' +
+                    '<span class="issue-num">#' + esc(r.number) + '</span>' +
+                    '<span class="issue-title">' + esc(r.title) + '</span>' +
+                '</div>' +
+                '<div class="issue-meta">' + meta + '</div>' +
+            '</div>' +
+            '<span class="issue-comments" title="' + comments + ' comments">' +
+                ICON_COMMENT + comments +
+            '</span>' +
+        '</article>';
+    }
+
+    // Keep the Repository rail badge honest when the open count is on screen.
+    function updateRailCount(openCount) {
+        const el = document.getElementById('count-issues');
+        if (!el)
+            return;
+        el.textContent = openCount;
+        el.hidden = openCount <= 0;
+    }
+
+    async function loadList() {
+        listHost.innerHTML = '<p class="muted issue-empty" style="padding:8px 2px;">Loading issues…</p>';
+        const res = await Server.call(WS, 'list', {repoId: repoId, status: issueFilter});
+        if (!res._Success) {
+            listHost.innerHTML = '<p class="muted issue-empty" style="padding:8px 2px;">Unable to load issues.</p>';
+            return;
+        }
+        const rows = res.rows || [];
+        if (issueFilter === 'open')
+            updateRailCount(rows.length);
+        if (!rows.length) {
+            listHost.innerHTML = '<p class="muted issue-empty" style="padding:8px 2px;">No issues to show.</p>';
+            return;
+        }
+        listHost.innerHTML = rows.map(issueRow).join('');
+    }
+
+    listHost.addEventListener('click', (e) => {
+        const row = e.target.closest('.issue-row');
+        if (row)
+            openIssue(Number(row.getAttribute('data-number')));
+    });
+    listHost.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter')
+            return;
+        const row = e.target.closest('.issue-row');
+        if (row)
+            openIssue(Number(row.getAttribute('data-number')));
+    });
+
+    // ---- composer (in place of the old popup) ----
+    function showCompose(writeHistory = true) {
+        if (guest)
+            return;
         $$('in-title').clear();
         $$('in-body').clear();
-        Utils.popup_open('iss-new-popup', 'in-title');
-    });
-    $$('in-cancel').onclick(() => Utils.popup_close());
+        if (writeHistory)
+            writeIssueHistory('new');
+        showView('compose');
+        $$('in-title').focus();
+    }
+    $$('iss-new').onclick(() => showCompose());
+    $$('in-back').onclick(() => showList('replace'));
+    $$('in-cancel').onclick(() => showList('replace'));
     $$('in-ok').onclick(async () => {
         if ($$('in-title').isError('Title'))
             return;
         const res = await Server.call(WS, 'create',
             {repoId: repoId, title: $$('in-title').getValue(), body: $$('in-body').getValue()});
         if (res._Success) {
-            Utils.popup_close();
-            await loadList();
+            Utils.toast.success('Issue created');
+            await showList('replace');
         }
     });
 
-    // Detail
-    async function openIssue(number) {
+    // ---- in-place detail ----
+    async function openIssue(number, options = {}) {
         const res = await Server.call(WS, 'get', {repoId: repoId, number: number});
         if (!res._Success)
             return;
         current = number;
         const i = res.issue;
-        $$('id-title').setValue('#' + i.number + '  ' + i.title);
-        $$('id-meta').setHTMLValue('<b>' + esc(i.status) + '</b> &middot; opened by ' + esc(i.createdBy) +
-            ' &middot; ' + fmtDate(i.createdTs));
-        $$('id-body').setHTMLValue(md(i.body));
+        const closed = ('' + i.status).toLowerCase() === 'closed';
+        document.getElementById('id-num').textContent = '#' + i.number;
+        document.getElementById('id-title').textContent = i.title;
+        document.getElementById('id-meta').innerHTML =
+            '<span class="ticket-pill ' + (closed ? 'closed' : 'open') + '">' +
+                (closed ? ICON_CLOSED : ICON_OPEN) + (closed ? 'Closed' : 'Open') + '</span>' +
+            '<span>opened by <b>' + esc(i.createdBy) + '</b></span>' +
+            '<span class="ticket-dotsep">&middot;</span><span>' + esc(fmtDate(i.createdTs)) + '</span>';
+        document.getElementById('id-body').innerHTML =
+            (i.body && i.body.trim()) ? md(i.body) : '<p class="muted" style="margin:0;">No description provided.</p>';
         renderComments(res.comments);
         $$('id-newcomment').clear();
-        $$('id-toggle').setValue(i.status === 'open' ? 'Close issue' : 'Reopen issue');
+        $$('id-toggle').setValue(closed ? 'Reopen issue' : 'Close issue');
         $$('id-toggle').onclick(async () => {
-            const newStatus = i.status === 'open' ? 'closed' : 'open';
+            const newStatus = closed ? 'open' : 'closed';
             const r = await Server.call(WS, 'setStatus', {repoId: repoId, number: number, status: newStatus});
             if (r._Success) {
-                Utils.popup_close();
-                await loadList();
+                Utils.toast.success(newStatus === 'closed' ? 'Issue closed' : 'Issue reopened');
+                await openIssue(number, {writeHistory: false});   // stay here, refresh state
             }
         });
-        Utils.popup_open('iss-detail-popup');
+        if (options.writeHistory !== false)
+            writeIssueHistory(number);
+        showView('detail');
+        if (guest)
+            hideGuestDetailControls();
     }
+    $$('id-back').onclick(() => showList('replace'));
+
     function renderComments(comments) {
-        if (!comments || !comments.length) {
-            $$('id-comments').setValue('No comments yet.');
+        const host = document.getElementById('id-comments');
+        const countEl = document.getElementById('id-comment-count');
+        const n = comments ? comments.length : 0;
+        if (countEl)
+            countEl.textContent = n;
+        if (!n) {
+            host.innerHTML = '<p class="muted" style="margin:0; padding:4px 0 10px;">No comments yet.</p>';
             return;
         }
         let html = '';
         for (const c of comments)
-            html += '<div class="cmt"><div class="meta">' + esc(c.username) + ' &middot; ' +
-                fmtDate(c.createdts) + '</div>' + md(c.body) + '</div>';
-        $$('id-comments').setHTMLValue(html);
+            html += '<div class="cmt"><div class="meta">' + esc(c.userName || c.username) + ' &middot; ' +
+                fmtDate(c.createdTs || c.createdts) + '</div>' + md(c.body) + '</div>';
+        host.innerHTML = html;
     }
     $$('id-comment').onclick(async () => {
+        if (guest)
+            return;
         const body = $$('id-newcomment').getValue();
         if (!body || !body.trim())
             return;
         const res = await Server.call(WS, 'comment', {repoId: repoId, number: current, body: body});
-        if (res._Success)
-            await openIssue(current);   // reload detail
+        if (res._Success) {
+            Utils.toast.success('Comment saved');
+            await openIssue(current, {writeHistory: false});   // reload detail
+        }
     });
-    $$('id-close').onclick(() => Utils.popup_close());
 
-    loadList();
+    if (Utils.setAppNavActive)
+        Utils.setAppNavActive('repositories');
+    if (guest)
+        $$('iss-new').hide();
+    await syncFromUrl();
+
+    function hideGuestDetailControls() {
+        const composer = document.getElementById('id-composer');
+        if (composer)
+            composer.style.display = 'none';
+        $$('id-toggle').hide();
+    }
 
 })();

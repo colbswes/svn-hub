@@ -13,6 +13,7 @@
 class Server {
 
     static #numberOfRetries = 1;
+    static #uuidStorageKey = 'svnhub.session.uuid';
 
     /**
      * Set the URL of the back-end.
@@ -25,7 +26,34 @@ class Server {
 
     // internal
     static setUUID(uuid) {
-        Server.uuid = uuid;
+        Server.uuid = uuid || '';
+        try {
+            if (Server.uuid)
+                sessionStorage.setItem(Server.#uuidStorageKey, Server.uuid);
+            else
+                sessionStorage.removeItem(Server.#uuidStorageKey);
+        } catch (err) {
+            // Some embedded browsers disable sessionStorage. The in-memory UUID still works.
+        }
+    }
+
+    // internal
+    static restoreUUID() {
+        try {
+            const uuid = sessionStorage.getItem(Server.#uuidStorageKey);
+            if (uuid && uuid !== 'null' && uuid !== 'undefined') {
+                Server.uuid = uuid;
+                return uuid;
+            }
+        } catch (err) {
+            // No persisted session is available.
+        }
+        return '';
+    }
+
+    // internal
+    static clearUUID() {
+        Server.setUUID('');
     }
 
     /**
@@ -42,16 +70,25 @@ class Server {
         DOMUtils.preventNavigation(false);  //  disable back button protection
 
         // Call backend Logout service if we have a valid UUID
-        if (Server.uuid) {
+        const uuid = Server.uuid;
+        Server.clearUUID();
+        if (uuid) {
             try {
-                await Server.call('', 'Logout', {});
+                await fetch(Server.url + '/rest', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    body: JSON.stringify({_uuid: uuid, _method: 'Logout', _class: ''}),
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
             } catch (err) {
                 // Ignore errors - we're logging out anyway
                 console.log('Logout service call failed:', err);
             }
         }
 
-        Server.uuid = '';
+        history.replaceState(null, document.title, location.pathname);
         location.reload();
     }
 
@@ -123,6 +160,43 @@ class Server {
             doCall(cls, meth, injson, 1, resolve, reject);
         });
 
+    }
+
+    /**
+     * Evoke a back-end REST service without changing the global cursor.
+     * Use this for lightweight background searches where the UI owns any loading
+     * indication and the whole app should not look blocked.
+     */
+    static async callQuiet(cls, meth, injson=null) {
+        Server.checkTime();
+        const path = "rest";
+        if (!injson)
+            injson = {};
+        else
+            injson = { ...injson };
+        injson._uuid = Server.uuid;
+        injson._method = meth;
+        injson._class = cls;
+
+        try {
+            const response = await fetch(Server.url + '/' + path, {
+                method: 'POST',
+                cache: 'no-store',
+                body: JSON.stringify(injson),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            const res = await response.json();
+            if (!res._Success && res._ErrorCode === 2) {
+                await Utils.showMessage('Error', res._ErrorMessage);
+                Server.logout();
+            }
+            return res;
+        } catch (err) {
+            console.log("Server communication error (quiet): " + cls + "." + meth + "(): " + err.message);
+            return {_Success: false, _ErrorMessage: Server.errorMessage};
+        }
     }
 
     /**
@@ -215,13 +289,12 @@ class Server {
     }
 
     static incCount() {
-        if (++Utils.suspendDepth === 1)
-            document.body.style.cursor = 'wait';
+        ++Utils.suspendDepth;
     }
 
     static decCount() {
-        if (--Utils.suspendDepth === 0)
-            document.body.style.cursor = 'default';
+        if (Utils.suspendDepth > 0)
+            --Utils.suspendDepth;
     }
 
     /**
@@ -396,7 +469,3 @@ class Server {
 Server.errorMessage = 'Error communicating with the server.';
 Server.timeLastCall;
 Server.maxInactiveSeconds = 0;  // max number of seconds between calls or zero for no max (or auto logout)
-
-
-
-

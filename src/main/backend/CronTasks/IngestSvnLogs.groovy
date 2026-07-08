@@ -159,7 +159,7 @@ class IngestSvnLogs {
         e.set("event_hash", hash)
         e.addRecord()
 
-        if (repoId != null && userId != null) {
+        if (repoId != null) {
             upsertRollup(db, repoId, userId, ev.day, ev.category, ev.tsMillis)
             upsertWorkingCopy(db, repoId, userId, ev.rawUser, ev.category, ev.revision, ev.tsMillis, ev.clientHost)
         }
@@ -218,14 +218,17 @@ class IngestSvnLogs {
 
     // -------- rollups --------
 
-    private static void upsertRollup(Connection db, int repoId, int userId, int day, String category, long ts) {
-        Record r = db.fetchOne(
-                "select * from access_daily_rollup where repo_id = ? and user_id = ? and event_day = ?",
-                repoId, userId, day)
+    private static void upsertRollup(Connection db, int repoId, Integer userId, int day, String category, long ts) {
+        Record r = userId == null
+                ? db.fetchOne("select * from access_daily_rollup where repo_id = ? and user_id is null and event_day = ?",
+                        repoId, day)
+                : db.fetchOne("select * from access_daily_rollup where repo_id = ? and user_id = ? and event_day = ?",
+                        repoId, userId, day)
         if (r == null) {
             r = db.newRecord("access_daily_rollup")
             r.set("repo_id", repoId)
-            r.set("user_id", userId)
+            if (userId != null)
+                r.set("user_id", userId)
             r.set("event_day", day)
             r.set("first_event_ts", ts)
             r.set("last_event_ts", ts)
@@ -257,21 +260,23 @@ class IngestSvnLogs {
 
     // -------- working copy freshness --------
 
-    private static void upsertWorkingCopy(Connection db, int repoId, int userId, String rawUser,
+    private static void upsertWorkingCopy(Connection db, int repoId, Integer userId, String rawUser,
                                           String category, Integer revision, long ts, String host) {
-        Record w = db.fetchOne("select * from working_copy_state where repo_id = ? and user_id = ?", repoId, userId)
-        boolean isSync = (category == "checkout" || category == "update" || category == "switch")
+        boolean isSync = (category == "checkout" || category == "update" || category == "switch" || category == "commit")
+        Record w = findWorkingCopy(db, repoId, userId, rawUser, host)
         if (w == null) {
+            if (!isSync || revision == null)
+                return
             w = db.newRecord("working_copy_state")
             w.set("repo_id", repoId)
-            w.set("user_id", userId)
-            w.set("raw_user", rawUser)
+            if (userId != null)
+                w.set("user_id", userId)
+            if (rawUser != null)
+                w.set("raw_user", rawUser)
             w.set("last_any_activity_ts", ts)
             w.set("last_client_host", host)
-            if (isSync && revision != null) {
-                w.set("last_synced_revision", revision)
-                w.set("last_sync_ts", ts)
-            }
+            w.set("last_synced_revision", revision)
+            w.set("last_sync_ts", ts)
             if (category == "checkout")
                 w.set("last_checkout_ts", ts)
             w.addRecord()
@@ -289,6 +294,16 @@ class IngestSvnLogs {
                 w.set("last_checkout_ts", ts)
             w.update()
         }
+    }
+
+    private static Record findWorkingCopy(Connection db, int repoId, Integer userId, String rawUser, String host) {
+        if (userId != null)
+            return db.fetchOne("select * from working_copy_state where repo_id = ? and user_id = ?", repoId, userId)
+        if (rawUser != null)
+            return db.fetchOne("select * from working_copy_state where repo_id = ? and user_id is null and raw_user = ?", repoId, rawUser)
+        if (host != null)
+            return db.fetchOne("select * from working_copy_state where repo_id = ? and user_id is null and raw_user is null and last_client_host = ?", repoId, host)
+        return null
     }
 
     // -------- helpers --------
