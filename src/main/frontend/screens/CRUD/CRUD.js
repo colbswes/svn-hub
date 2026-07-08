@@ -54,6 +54,7 @@
             const res = await Server.call(WS, 'addRecord', data);
             if (res._Success) {
                 Utils.popup_close();
+                Utils.toast.success('Record saved');
                 updateGrid();
             }
         });
@@ -85,6 +86,7 @@
             const res = await Server.call(WS, 'updateRecord', data);
             if (res._Success) {
                 Utils.popup_close();
+                Utils.toast.success('Record saved');
                 updateGrid();
             }
         });

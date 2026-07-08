@@ -1,19 +1,124 @@
-<div>
-    <style>
-        .help-topic-btn {
-            width: 260px;
-            margin-bottom: 10px;
-        }
-        .help-hint {
-            color: #57606a;
-            font-size: 13px;
-            margin-bottom: 16px;
-        }
-    </style>
+<style>
+    .help-topic {
+        align-content: start;
+    }
+    .help-topic h3 {
+        margin-bottom: 2px;
+    }
+    .help-topic p {
+        margin: 0;
+    }
+    .help-topic .help-open {
+        margin-top: auto;
+    }
+    .help-topic .icon.teal {
+        color: var(--teal);
+        background: var(--teal-soft);
+        border-color: #a9cbc4;
+    }
+    .help-topic .icon.plum {
+        color: var(--plum);
+        background: var(--plum-soft);
+        border-color: #d7b2c5;
+    }
+    .help-topic .icon.amber {
+        color: #76550b;
+        background: var(--amber-soft);
+        border-color: #dec681;
+    }
+    .help-doc {
+        padding: 16px 18px;
+        color: var(--ink-2);
+        font-size: 14.5px;
+        line-height: 1.62;
+    }
+    .help-doc p {
+        margin: 0 0 12px;
+    }
+    .help-doc p:last-child {
+        margin-bottom: 0;
+    }
+    .help-doc code {
+        padding: 2px 5px;
+        color: var(--ink);
+        background: var(--paper-2);
+        border-radius: 4px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+    }
+</style>
+<div class="page-shell wrap-narrow">
+    <header class="page-header">
+        <div class="page-title-block">
+            <div class="eyebrow">Help</div>
+            <h1>Reference for SVN teams.</h1>
+            <div class="lead">Subversion concepts, repository conventions, and the centralized version-control model behind <span class="wordmark">svn<span class="dot"></span>hub</span>.</div>
+        </div>
+    </header>
 
-    <h2 style="margin-top: 0;">Help</h2>
-    <div class="help-hint">Select a topic below for more information.</div>
+    <section class="help-topic-grid">
+        <div class="card card-hover help-topic">
+            <span class="icon">SVN</span>
+            <div>
+                <h3>About Subversion</h3>
+                <p class="muted">Virtual copies, global revisions, branches, tags, and checkout scope.</p>
+            </div>
+            <push-button id="about-subversion" class="btn-accent help-open">Open</push-button>
+        </div>
 
-    <push-button class="help-topic-btn" id="about-subversion">About Subversion</push-button>
-    <br>
+        <div class="card card-hover help-topic">
+            <span class="icon teal">/</span>
+            <div>
+                <h3>Repository layout</h3>
+                <p class="muted">The trunk / branches / tags convention every SVN project shares.</p>
+            </div>
+            <push-button id="topic-layout" class="help-open">Read</push-button>
+        </div>
+
+        <div class="card card-hover help-topic">
+            <span class="icon plum">co</span>
+            <div>
+                <h3>Checkout &amp; update</h3>
+                <p class="muted">Create a working copy and pull the latest revisions from the central line.</p>
+            </div>
+            <push-button id="topic-checkout" class="help-open">Read</push-button>
+        </div>
+
+        <div class="card card-hover help-topic">
+            <span class="icon amber">rN</span>
+            <div>
+                <h3>Revisions r1..rN</h3>
+                <p class="muted">One global, monotonically increasing revision number per commit.</p>
+            </div>
+            <push-button id="topic-revisions" class="help-open">Read</push-button>
+        </div>
+
+        <div class="card card-hover help-topic">
+            <span class="icon">lk</span>
+            <div>
+                <h3>Locks</h3>
+                <p class="muted">Reserve unmergeable files so only one person edits them at a time.</p>
+            </div>
+            <push-button id="topic-locks" class="help-open">Read</push-button>
+        </div>
+
+        <div class="card card-hover help-topic">
+            <span class="icon teal">MR</span>
+            <div>
+                <h3>Merge requests</h3>
+                <p class="muted">Propose a branch-to-target merge, review the diff, then commit it.</p>
+            </div>
+            <push-button id="topic-mr" class="help-open">Read</push-button>
+        </div>
+    </section>
+
+    <popup id="help-topic-popup" width="620px" height="440px">
+        <popup-title><text-label id="help-topic-title"></text-label></popup-title>
+        <popup-body>
+            <div class="help-doc"><text-label id="help-topic-body"></text-label></div>
+            <div style="display:flex; justify-content:flex-end; padding:12px 18px;">
+                <push-button id="help-topic-close" class="btn-accent">Close</push-button>
+            </div>
+        </popup-body>
+    </popup>
 </div>

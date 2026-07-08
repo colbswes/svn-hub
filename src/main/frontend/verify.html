@@ -1,24 +1,38 @@
-<div class="center">
-    <div style="display: inline-block; text-align: center; max-width: 460px;">
-        <h1>Svn-Hub</h1>
-        <div style="margin-bottom: 14px; color: #57606a;">Verify your email address</div>
-
-        <p style="color:#24292f; line-height:1.55; margin: 0 0 18px;">
-            We sent a 6-digit verification code to
-            <b><text-label id="verify-email"></text-label></b>.
-            Enter it below to activate your account.
-        </p>
-
-        <form onsubmit="return false;" autocomplete="off">
-            <div style="display:inline-block; width:60px; text-align:right; margin-right:10px;">Code:</div>
-            <text-input id="code" required maxlength="6" autocomplete="one-time-code"></text-input>
-            <br>
-            <push-button id="verify" style="margin-top:20px;">Verify</push-button>
-        </form>
-
-        <div style="margin-top:18px;">
-            <push-button id="resend">Resend code</push-button>
-            <push-button id="logout" style="margin-left:10px;">Log out</push-button>
+<div class="auth-shell">
+    <aside class="auth-panel">
+        <div class="brand">
+            <img class="brand-mark" src="assets/svnhub-mark.svg" alt="" aria-hidden="true">
+            <span class="wordmark">svn<span class="dot"></span>hub</span>
         </div>
-    </div>
+
+        <div class="auth-copy">
+            <div class="eyebrow">Email verification</div>
+            <h1>Activate the account before opening repositories.</h1>
+            <p>Verification protects repository access and keeps account recovery tied to a real inbox.</p>
+        </div>
+    </aside>
+
+    <main class="auth-form-wrap">
+        <section class="auth-card">
+            <div class="eyebrow">Verify email</div>
+            <h1>Enter your code</h1>
+            <p class="muted" style="margin:8px 0 0;">
+                We sent a 6-digit verification code to
+                <b><text-label id="verify-email"></text-label></b>.
+            </p>
+
+            <form class="auth-form" onsubmit="return false;" autocomplete="off">
+                <div class="field">
+                    <label for="code">Code</label>
+                    <text-input id="code" required maxlength="6" autocomplete="one-time-code"></text-input>
+                </div>
+
+                <div class="auth-actions">
+                    <push-button id="verify" class="btn-accent">Verify</push-button>
+                    <push-button id="resend">Resend code</push-button>
+                    <push-button id="logout">Log out</push-button>
+                </div>
+            </form>
+        </section>
+    </main>
 </div>

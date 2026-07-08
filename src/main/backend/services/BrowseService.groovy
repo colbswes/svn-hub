@@ -97,7 +97,8 @@ class BrowseService {
     // ---------------------------------------------------------------- helpers
 
     private static Integer uid(ProcessServlet servlet) {
-        return (Integer) servlet.getUserData().getUserId()
+        def ud = servlet.getUserData()
+        return ud == null ? null : (Integer) ud.getUserId()
     }
 
     private static String basename(String path) {

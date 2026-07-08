@@ -1,5 +1,5 @@
 
-/* global $$, Server, Router */
+/* global $$, Server, Utils, Router */
 
 'use strict';
 

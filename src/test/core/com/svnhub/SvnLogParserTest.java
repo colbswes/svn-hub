@@ -54,6 +54,21 @@ public class SvnLogParserTest {
         assertEquals("check-path", e.action);
         assertEquals("browse", e.category);
         assertEquals("/", e.path);
+        assertEquals(Integer.valueOf(1), e.revision);
+    }
+
+    @Test
+    void switchReadsTargetPegRevision() {
+        SvnLogParser.Event e = SvnLogParser.parse(
+                "87164 2026-07-07T20:08:42.421768Z 127.0.0.1 - admin/svn-hub-main switch /trunk /branches/theme-blue-rework@5");
+        assertEquals("switch", e.action);
+        assertEquals("switch", e.category);
+        assertEquals("read", e.verbClass);
+        assertNull(e.rawUser);
+        assertEquals("admin/svn-hub-main", e.repoKey);
+        assertEquals("/trunk", e.path);
+        assertEquals(Integer.valueOf(5), e.revision);
+        assertEquals("/branches/theme-blue-rework", e.extra);
     }
 
     @Test

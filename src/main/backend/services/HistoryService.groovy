@@ -24,8 +24,9 @@ class HistoryService {
         String path = injson.getString("path", "")
         int limit = injson.getInt("limit", 50)
         long startRev = injson.getLong("startRev", -1L)
+        boolean withPaths = injson.getBoolean("withPaths", false)
 
-        outjson.put("commits", Json.toJsonArray(SvnRepo.log(fsPath, path, startRev, 0L, limit, false)))
+        outjson.put("commits", Json.toJsonArray(SvnRepo.log(fsPath, path, startRev, 0L, limit, withPaths)))
     }
 
     /** Full detail for one revision: metadata, changed paths, and its diff. */
@@ -63,6 +64,7 @@ class HistoryService {
     }
 
     private static Integer uid(ProcessServlet servlet) {
-        return (Integer) servlet.getUserData().getUserId()
+        def ud = servlet.getUserData()
+        return ud == null ? null : (Integer) ud.getUserId()
     }
 }

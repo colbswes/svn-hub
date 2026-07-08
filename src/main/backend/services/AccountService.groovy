@@ -14,25 +14,48 @@ import com.svnhub.EmailBodies
 
 /**
  * Authenticated account self-service:
- *   status()            — current handle / email / verification state
+ *   status()            — current handle / email / name / verification / admin state
  *   verifyEmail(code)   — confirm the email with the emailed 6-digit code
  *   resendVerification()— re-issue and resend the code (lightly throttled)
  *   changePassword(...) — change one's own password (web hash + SVN credential)
+ *   updateProfile(...)  — change one's own display name (full_name)
  *
  * The current user is taken from the session (servlet.getUserData()), never from
  * the request body, so a user can only act on their own account.
  */
 class AccountService {
 
-    /** Current account status (used by the verify screen and the Framework shell). */
+    /** Current account status (used by refresh restore, the verify screen and the Framework shell). */
     void status(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = (Integer) servlet.getUserData().getUserId()
-        Record rec = db.fetchOne("select handle, email, email_verified from users where user_id = ?", userId)
+        Record rec = db.fetchOne("select handle, email, full_name, email_verified, is_admin from users where user_id = ?", userId)
         if (rec == null)
             throw new UserException("Account not found.")
         outjson.put("handle", rec.getString("handle"))
         outjson.put("email", rec.getString("email") ?: "")
+        outjson.put("fullName", rec.getString("full_name") ?: "")
         outjson.put("emailVerified", "Y".equals(rec.getString("email_verified")))
+        outjson.put("isAdmin", "Y".equals(rec.getString("is_admin")))
+        outjson.put("usedResetCode", Boolean.TRUE.equals(servlet.getUserData().getUserData("usedResetCode")))
+    }
+
+    /**
+     * Update the current user's own profile.  Only the display name (full_name)
+     * is self-editable: the handle is the repo namespace (handle/name) and the
+     * email is the login credential, so both stay admin-managed.  The user is
+     * taken from the session, never the request body.
+     */
+    void updateProfile(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
+        Integer userId = (Integer) servlet.getUserData().getUserId()
+        String fullName = injson.getString("fullName", "")
+        fullName = fullName == null ? "" : fullName.trim()
+        if (fullName.length() > 200)
+            throw new UserException("Your name must be 200 characters or fewer.")
+        Record rec = db.fetchOne("select user_id from users where user_id = ? and user_active = 'Y'", userId)
+        if (rec == null)
+            throw new UserException("Account not found.")
+        db.execute("update users set full_name = ? where user_id = ?", fullName, userId)
+        outjson.put("fullName", fullName)
     }
 
     /** Verify the current user's email with the 6-digit code that was emailed to them. */
@@ -84,6 +107,8 @@ class AccountService {
         boolean ok = passwordMatches(rec.getString("user_password"), current)
         if (!ok)
             ok = VerificationCodes.check(db, userId, VerificationCodes.PURPOSE_RESET, current, true)
+        if (!ok && Boolean.TRUE.equals(servlet.getUserData().getUserData("usedResetCode")))
+            ok = VerificationCodes.check(db, userId, VerificationCodes.PURPOSE_RESET, servlet.getUserData().getPassword(), false)
         if (!ok)
             throw new UserException("Your current password is incorrect.")
         // One credential serves both the web UI (hashed) and svn clients (clear text).

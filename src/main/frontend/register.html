@@ -1,36 +1,63 @@
-<div class="center">
-    <div style="display: inline-block; text-align: center;">
-        <h1>Svn-Hub</h1>
-        <div style="margin-bottom: 18px; color: #57606a;">Create your account</div>
-
-        <form onsubmit="return false;" autocomplete="on">
-            <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px;">Email:</div>
-            <text-input id="email" required autocomplete="username" maxlength="255"></text-input>
-            <br>
-            <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px; margin-top: 10px;">Username:</div>
-            <text-input id="handle" style="margin-top: 10px;" required maxlength="64" autocomplete="off"></text-input>
-            <br>
-            <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px; margin-top: 10px;">Full Name:</div>
-            <text-input id="full-name" style="margin-top: 10px;" maxlength="200"></text-input>
-            <br>
-            <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px; margin-top: 10px;">Password:</div>
-            <text-input id="password" style="margin-top: 10px;" required password autocomplete="new-password"></text-input>
-            <br>
-            <div style="display: inline-block; width: 120px; text-align: right; margin-right: 10px; margin-top: 10px;">Confirm:</div>
-            <text-input id="password2" style="margin-top: 10px;" required password autocomplete="new-password"></text-input>
-            <br>
-            <push-button id="register" style="margin-top: 20px;">Create account</push-button>
-        </form>
-
-        <div style="margin-top: 24px;">
-            Already have an account?
-            <push-button id="to-login">Sign in</push-button>
+<div class="auth-shell">
+    <aside class="auth-panel">
+        <div class="brand">
+            <img class="brand-mark" src="assets/svnhub-mark.svg" alt="" aria-hidden="true">
+            <span class="wordmark">svn<span class="dot"></span>hub</span>
         </div>
-        <div style="margin-top: 10px; color: #57606a; font-size: 12px; max-width: 440px;">
-            You log in with your email. Your <b>username</b> is a URL-safe handle (letters, digits,
-            dash, underscore) &mdash; your repositories live under it
-            (<code>svn://&hellip;/username/&lt;repo&gt;</code>). Your password works for both the web
-            UI and <code>svn</code> checkouts.
+
+        <div class="auth-copy">
+            <div class="eyebrow">Create namespace</div>
+            <h1>Your repositories live under your handle.</h1>
+            <p>Choose a URL-safe username once. <span class="wordmark">svn<span class="dot"></span>hub</span> uses it as your repository namespace, access identity, and public profile handle.</p>
+            <div class="path-pill">svn://host/username/repository</div>
         </div>
-    </div>
+    </aside>
+
+    <main class="auth-form-wrap">
+        <section class="auth-card">
+            <div class="eyebrow">New account</div>
+            <h1>Create your account</h1>
+            <p class="muted" style="margin:8px 0 0;">Your password works for the web UI and svn checkouts.</p>
+
+            <form class="auth-form" onsubmit="return false;" autocomplete="on">
+                <div class="field">
+                    <label for="email">Email</label>
+                    <text-input id="email" required autocomplete="username" maxlength="255"></text-input>
+                </div>
+
+                <div class="field">
+                    <label for="handle">Username</label>
+                    <text-input id="handle" required maxlength="64" autocomplete="off"></text-input>
+                </div>
+
+                <div class="field">
+                    <label for="full-name">Full name</label>
+                    <text-input id="full-name" maxlength="200"></text-input>
+                </div>
+
+                <div class="field">
+                    <label for="password">Password</label>
+                    <text-input id="password" required password autocomplete="new-password"></text-input>
+                </div>
+
+                <div class="field">
+                    <label for="password2">Confirm</label>
+                    <text-input id="password2" required password autocomplete="new-password"></text-input>
+                </div>
+
+                <div class="auth-actions">
+                    <push-button id="register" class="btn-accent">Create account</push-button>
+                </div>
+            </form>
+
+            <div class="passkey-hint">
+                Usernames may contain letters, digits, dash, and underscore. No spaces.
+            </div>
+
+            <div class="auth-foot">
+                Already have an account?
+                <push-button id="to-login" class="btn-sm btn-quiet">Sign in</push-button>
+            </div>
+        </section>
+    </main>
 </div>

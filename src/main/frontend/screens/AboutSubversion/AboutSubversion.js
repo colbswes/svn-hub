@@ -1,5 +1,5 @@
 
-/* global $$, Router */
+/* global $$, Utils, Router */
 
 'use strict';
 
@@ -8,5 +8,8 @@
     $$('as-back').onclick(function () {
         Router.go('/help');
     });
+
+    if (Utils.setAppNavActive)
+        Utils.setAppNavActive('help');
 
 })();

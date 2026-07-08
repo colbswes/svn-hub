@@ -21,16 +21,21 @@ Utils.afterComponentsLoaded(async function () {
 
     Utils.forceASCII = false;  // Force all text entry to ASCII (see Utils.forceASCII)
 
-    //  SvnHub-specific stylesheets and libraries (markdown, syntax highlighting, diff
-    //  rendering, charts).  Loaded (version-busted) before routing starts so every
-    //  screen can rely on them being present.
+    //  SvnHub-specific stylesheets and libraries (design system, markdown, syntax
+    //  highlighting, diff rendering, charts) plus the shared render helpers
+    //  (SvnHubUI) and the "Why Subversion?" modal (SvnHubWhyModal).  Loaded
+    //  (version-busted) before routing starts so every screen can rely on them.
+    addStylesheet('svnhub-theme.css');
+    addStylesheet('lib/devicon/devicon.css');   // self-hosted file-type icons (repository browser)
     addStylesheet('lib/highlight-github.min.css');
     addStylesheet('lib/diff2html.min.css');
     await getScripts([
         'lib/marked.min.js',
         'lib/highlight.min.js',
         'lib/diff2html.min.js',
-        'lib/chart.umd.min.js'
+        'lib/chart.umd.min.js',
+        'screens/shared/render.js',
+        'why-modal.js'
     ]);
 
     //  If the back end was restarted since this browser's session was established,
@@ -52,18 +57,27 @@ Utils.afterComponentsLoaded(async function () {
 
 (function () {
     Utils.useComponent('Popup');
+    Utils.useComponent('Accordion');
+    Utils.useComponent('Avatar');
+    Utils.useComponent('Badge');
     Utils.useComponent('CheckBox');
     Utils.useComponent('DateInput');
     Utils.useComponent('DropDown');
     Utils.useComponent('DurationInput');
     Utils.useComponent('ListBox');
+    Utils.useComponent('MenuButton');
     Utils.useComponent('NumericInput');
+    Utils.useComponent('PanelCard');
     Utils.useComponent('PushButton');
     Utils.useComponent('RadioButton');
+    Utils.useComponent('SearchInput');
+    Utils.useComponent('SectionTitle');
+    Utils.useComponent('SegmentedControl');
     Utils.useComponent('TextboxInput');
     Utils.useComponent('TextInput');
     Utils.useComponent('TextLabel');
     Utils.useComponent('TimeInput');
+    Utils.useComponent('Toast');
     Utils.useComponent('FileUpload');
     Utils.useComponent('NativeDateInput');
     Utils.useComponent('Picture');

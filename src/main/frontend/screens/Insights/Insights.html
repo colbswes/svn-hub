@@ -1,41 +1,315 @@
-<div>
-    <style>
-        .ins-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-        .ins-section { font-weight: 600; margin: 20px 0 6px; }
-        .ins-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
-        .ins-card { border: 1px solid #d0d7de; border-radius: 8px; padding: 9px 14px; min-width: 110px; }
-        .ins-card .n { font-size: 22px; font-weight: 700; }
-        .ins-card .l { color: #57606a; font-size: 12px; }
-        /* leave breathing room below the last control */
-        .ins-bottom-pad { height: 48px; }
-    </style>
+<div class="page-shell wrap-wide insights-page">
+    <header class="page-header insights-head">
+        <div class="page-title-block">
+            <h1>Insights</h1>
+            <div class="lead">Revision velocity, checkout activity, clone behavior, and how far each working copy has drifted from HEAD.</div>
+        </div>
+        <div class="insights-controls">
+            <drop-down id="ins-repo" style="width: 210px"></drop-down>
+            <div class="range-control">
+                <div class="custom-range" id="custom-range" aria-hidden="true">
+                    <native-date-input id="rng-start" style="width: 134px"></native-date-input>
+                    <span class="custom-range-sep">to</span>
+                    <native-date-input id="rng-end" style="width: 134px"></native-date-input>
+                    <push-button id="rng-apply" class="btn-accent btn-sm">Apply</push-button>
+                </div>
+                <div class="seg" id="range-seg" role="tablist">
+                    <span class="seg-thumb" id="range-thumb" aria-hidden="true"></span>
+                    <push-button id="rng-7" class="seg-btn">7d</push-button>
+                    <push-button id="rng-30" class="seg-btn active">30d</push-button>
+                    <push-button id="rng-90" class="seg-btn">90d</push-button>
+                    <push-button id="rng-all" class="seg-btn">All</push-button>
+                    <push-button id="rng-custom" class="seg-btn">Custom</push-button>
+                </div>
+            </div>
+        </div>
+    </header>
 
-    <h2 style="margin-top: 0;">Insights</h2>
-
-    <div class="ins-controls">
-        <span>Repository:</span>
-        <drop-down id="ins-repo" style="width: 240px"></drop-down>
-        <span style="margin-left: 12px;">From:</span>
-        <native-date-input id="ins-begin"></native-date-input>
-        <span>To:</span>
-        <native-date-input id="ins-end"></native-date-input>
-        <push-button id="ins-apply">Apply</push-button>
+    <div id="ins-error" class="ins-error" role="alert" style="display:none;">
+        <span class="ins-error-text"></span>
+        <button type="button" class="ins-error-retry" id="ins-error-retry">Retry</button>
     </div>
 
-    <div class="ins-section">Repository</div>
-    <div><text-label id="ins-repo-stats"></text-label></div>
+    <div id="ins-empty" class="card card-pad" style="display:none;">
+        <h3>No repository data</h3>
+        <p class="muted">There are no repositories you can inspect yet.</p>
+    </div>
 
-    <div class="ins-section">Activity <text-label id="ins-range-label"></text-label></div>
-    <div><text-label id="ins-activity-stats"></text-label></div>
+    <div id="ins-body">
+        <section class="ins-section" data-section="overview">
+            <button type="button" class="ins-section-head" data-ins-section="overview" aria-expanded="true" aria-controls="ins-section-overview">
+                <span class="ins-section-caret" aria-hidden="true"></span>
+                <span class="ins-section-copy">
+                    <span class="ins-section-title">Overview</span>
+                    <span class="ins-section-note">Velocity, contributors, and working-copy freshness.</span>
+                </span>
+                <span class="ins-section-line" aria-hidden="true"></span>
+            </button>
+            <div class="ins-section-body" id="ins-section-overview">
+                <div class="kpi-row">
+                    <div class="kpi-card card">
+                        <div class="kpi-label">Revision velocity</div>
+                        <div class="kpi-num"><text-label id="kpi-commits"></text-label></div>
+                        <div class="kpi-sub"><span class="kpi-delta" id="kpi-commits-delta"></span><text-label id="kpi-commits-sub"></text-label></div>
+                        <span class="kpi-spark" id="spark-commits"></span>
+                    </div>
+                    <div class="kpi-card card">
+                        <div class="kpi-label">Active contributors</div>
+                        <div class="kpi-num"><text-label id="kpi-contributors"></text-label></div>
+                        <div class="kpi-sub"><span class="kpi-delta" id="kpi-contributors-delta"></span><text-label id="kpi-contributors-sub"></text-label></div>
+                    </div>
+                    <div class="kpi-card card">
+                        <div class="kpi-label">Working copies</div>
+                        <div class="kpi-num"><text-label id="kpi-clones"></text-label></div>
+                        <div class="kpi-sub"><text-label id="kpi-clones-sub"></text-label></div>
+                    </div>
+                    <div class="kpi-card card">
+                        <div class="kpi-label" id="kpi-head-label">Current revision</div>
+                        <div class="kpi-num mono"><text-label id="kpi-head"></text-label></div>
+                        <div class="kpi-sub"><text-label id="kpi-head-sub"></text-label></div>
+                        <span class="kpi-spark" id="spark-head"></span>
+                    </div>
+                </div>
 
-    <div class="ins-section">Branches (<text-label id="ins-branch-count"></text-label>)</div>
-    <div id="branches-grid" style="width: 100%; height: 150px;"></div>
+                <div class="insights-grid cadence-grid">
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Commit cadence</h2>
+                                <div class="muted">Reads and writes per day <span id="cadence-range-label" class="mono"></span></div>
+                            </div>
+                            <div class="legend">
+                                <span class="legend-item"><span class="swatch swatch-read"></span>Reads</span>
+                                <span class="legend-item"><span class="swatch swatch-write"></span>Writes</span>
+                            </div>
+                        </div>
+                        <div class="chart-holder"><canvas id="cadence-chart"></canvas></div>
+                    </section>
 
-    <div class="ins-section">Tags (<text-label id="ins-tag-count"></text-label>)</div>
-    <div id="tags-grid" style="width: 100%; height: 150px;"></div>
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Working-copy freshness</h2>
+                                <div class="muted">Distance from HEAD</div>
+                            </div>
+                        </div>
+                        <div class="donut-wrap">
+                            <div class="donut-holder">
+                                <canvas id="freshness-chart"></canvas>
+                                <div class="donut-center">
+                                    <span class="donut-pct"><text-label id="fresh-pct"></text-label></span>
+                                    <span class="donut-cap">up to date</span>
+                                </div>
+                            </div>
+                            <div class="donut-legend" id="fresh-legend"></div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </section>
 
-    <div class="ins-section">Clones (<text-label id="ins-clone-count"></text-label>)</div>
-    <div id="clones-grid" style="width: 100%; height: 200px;"></div>
+        <section class="ins-section" data-section="activity">
+            <button type="button" class="ins-section-head" data-ins-section="activity" aria-expanded="true" aria-controls="ins-section-activity">
+                <span class="ins-section-caret" aria-hidden="true"></span>
+                <span class="ins-section-copy">
+                    <span class="ins-section-title">Activity</span>
+                    <span class="ins-section-note">Events, read volume, and hourly patterns.</span>
+                </span>
+                <span class="ins-section-line" aria-hidden="true"></span>
+            </button>
+            <div class="ins-section-body" id="ins-section-activity">
+                <div class="insights-grid activity-detail-grid">
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Activity breakdown</h2>
+                                <div class="muted">Every event category the backend has in range</div>
+                            </div>
+                            <span class="chip chip-copper"><text-label id="activity-total"></text-label> events</span>
+                        </div>
+                        <div id="activity-mix" class="activity-mix"></div>
+                        <div class="activity-facts">
+                            <div><span class="fact-k">Users</span><span class="fact-v mono" id="activity-users">0</span></div>
+                            <div><span class="fact-k">Clients</span><span class="fact-v mono" id="activity-clients">0</span></div>
+                            <div><span class="fact-k">Bytes</span><span class="fact-v mono" id="activity-bytes">0 B</span></div>
+                            <div id="revision-adoption"><span class="fact-k">HEAD adoption</span><span class="fact-v mono" id="activity-adoption">-</span></div>
+                        </div>
+                    </section>
 
-    <div class="ins-bottom-pad"></div>
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Read heatmap</h2>
+                                <div class="muted">Checkout, update, browse, and diff reads by local hour</div>
+                            </div>
+                        </div>
+                        <div class="heatmap-wrap">
+                            <div id="read-heatmap" class="read-heatmap"></div>
+                            <div id="heat-tooltip" class="heat-tooltip" role="tooltip" aria-hidden="true"></div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </section>
+
+        <section class="ins-section" data-section="people">
+            <button type="button" class="ins-section-head" data-ins-section="people" aria-expanded="true" aria-controls="ins-section-people">
+                <span class="ins-section-caret" aria-hidden="true"></span>
+                <span class="ins-section-copy">
+                    <span class="ins-section-title">People and Structure</span>
+                    <span class="ins-section-note">Contributors, branches, and tags.</span>
+                </span>
+                <span class="ins-section-line" aria-hidden="true"></span>
+            </button>
+            <div class="ins-section-body" id="ins-section-people">
+                <div class="insights-grid split-6-4" id="contrib-grid">
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Top contributors</h2>
+                                <div class="muted">By commits landed in range</div>
+                            </div>
+                            <span class="chip chip-copper">by commits</span>
+                        </div>
+                        <div id="contributors-list" class="contrib-list"></div>
+                    </section>
+
+                    <section class="card card-pad" id="lifecycle-card">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Branches &amp; tags</h2>
+                                <div class="muted">Cheap server-side copies</div>
+                            </div>
+                        </div>
+                        <div class="ref-block">
+                            <div class="ref-head"><span class="chip chip-plum"><text-label id="ins-branch-count"></text-label> branches</span></div>
+                            <div id="branch-list" class="ref-list"></div>
+                            <div class="ref-head" style="margin-top:16px;"><span class="chip chip-amber"><text-label id="ins-tag-count"></text-label> tags</span></div>
+                            <div id="tag-list" class="ref-list"></div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </section>
+
+        <section class="ins-section" data-section="checkout">
+            <button type="button" class="ins-section-head" data-ins-section="checkout" aria-expanded="true" aria-controls="ins-section-checkout">
+                <span class="ins-section-caret" aria-hidden="true"></span>
+                <span class="ins-section-copy">
+                    <span class="ins-section-title">Checkout Behavior</span>
+                    <span class="ins-section-note">Clone events, update habits, and working copies.</span>
+                </span>
+                <span class="ins-section-line" aria-hidden="true"></span>
+            </button>
+            <div class="ins-section-body" id="ins-section-checkout">
+                <div class="insights-grid split-6-4">
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Checkout vs update</h2>
+                                <div class="muted">High checkout share can indicate recloning instead of updating</div>
+                            </div>
+                            <div class="legend">
+                                <span class="legend-item"><span class="swatch swatch-checkout"></span>Checkout</span>
+                                <span class="legend-item"><span class="swatch swatch-update"></span>Update</span>
+                                <span class="legend-item"><span class="swatch swatch-switch"></span>Switch</span>
+                            </div>
+                        </div>
+                        <div id="checkout-mix" class="checkout-mix"></div>
+                    </section>
+
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Clone activity</h2>
+                                <div class="muted">New checkout/export activity in range</div>
+                            </div>
+                            <span class="chip"><text-label id="clone-activity-count"></text-label> clones</span>
+                        </div>
+                        <div class="wc-table-wrap">
+                            <table class="data-table compact-table">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Host</th>
+                                        <th class="num">Synced</th>
+                                        <th>Cloned</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clone-tbody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="card card-pad">
+                    <div class="section-title" style="margin-top:0;">
+                        <div>
+                            <h2>Working copies</h2>
+                            <div class="muted">Who has checked out, and how far behind the central line - the number GitHub can't show.</div>
+                        </div>
+                        <span class="chip"><text-label id="ins-clone-count"></text-label> copies</span>
+                    </div>
+                    <div class="wc-table-wrap">
+                        <table class="data-table wc-table">
+                            <thead>
+                                <tr>
+                                    <th>Developer</th>
+                                    <th>Client host</th>
+                                    <th class="num">Synced</th>
+                                    <th>Freshness</th>
+                                    <th>Last activity</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wc-tbody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </section>
+
+        <section class="ins-section" data-section="access">
+            <button type="button" class="ins-section-head" data-ins-section="access" aria-expanded="true" aria-controls="ins-section-access">
+                <span class="ins-section-caret" aria-hidden="true"></span>
+                <span class="ins-section-copy">
+                    <span class="ins-section-title">Access Patterns</span>
+                    <span class="ins-section-note">Hot paths, client load, and stale copies.</span>
+                </span>
+                <span class="ins-section-line" aria-hidden="true"></span>
+            </button>
+            <div class="ins-section-body" id="ins-section-access">
+                <div class="insights-grid thirds-grid">
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Hot paths</h2>
+                                <div class="muted">Most-read repository paths</div>
+                            </div>
+                        </div>
+                        <div id="hot-paths" class="rank-list mono"></div>
+                    </section>
+
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Client load</h2>
+                                <div class="muted">Read/write volume by host</div>
+                            </div>
+                        </div>
+                        <div id="client-load" class="rank-list"></div>
+                    </section>
+
+                    <section class="card card-pad">
+                        <div class="section-title" style="margin-top:0;">
+                            <div>
+                                <h2>Stale copies</h2>
+                                <div class="muted">No activity in the last <text-label id="stale-days"></text-label> days</div>
+                            </div>
+                        </div>
+                        <div id="stale-list" class="stale-list"></div>
+                    </section>
+                </div>
+            </div>
+        </section>
+    </div>
 </div>

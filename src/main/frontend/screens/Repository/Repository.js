@@ -1,44 +1,328 @@
-/* global $$, Utils, Server, AGGrid, DateTimeUtils, marked, hljs, Diff2Html, Router */
+/* global $$, Utils, Server, AGGrid, DateUtils, DateTimeUtils, marked, hljs, SvnHubUI */
 'use strict';
 
 (async function () {
 
+    const WS_REPO = 'services/RepositoryService';
+    const WS_ACC = 'services/RepositoryAccessService';
     const WS_BROWSE = 'services/BrowseService';
     const WS_HIST = 'services/HistoryService';
+    const WS_STATS = 'services/StatsService';
 
+    const guest = Utils.getData('guest') === true;
     const repoId = Utils.getData('repoId');
-    const repoKey = Utils.getData('repoKey');
-    const repoName = Utils.getData('repoName');
+    let repoKey = Utils.getData('repoKey');
+    let repoName = Utils.getData('repoName');
+    const repoReturnTo = Utils.getData('repoReturnTo');
+    const pendingSection = Utils.getAndEraseData('repoSection');
+    const pendingRevision = Number(Utils.getAndEraseData('repoRevision')) || 0;
+    const pendingRepoPath = Utils.getAndEraseData('repoPath') || '';
+    const pendingRepoFile = Utils.getAndEraseData('repoFile') === true;
+    Utils.getAndEraseData('repoIssue');
+    Utils.getAndEraseData('repoMergeRequest');
+
+    function fallbackReturnTo() {
+        return guest
+            ? {page: 'screens/Discover/Discover', nav: 'discover', data: {}}
+            : {page: 'screens/Dashboard/Dashboard', nav: 'repositories', data: {}};
+    }
+
+    function repoNav() {
+        if (repoReturnTo && Object.prototype.hasOwnProperty.call(repoReturnTo, 'nav'))
+            return repoReturnTo.nav;
+        return guest ? 'discover' : 'repositories';
+    }
+
+    function backTarget() {
+        return (repoReturnTo && repoReturnTo.page) ? repoReturnTo : fallbackReturnTo();
+    }
+    function personReturnTarget() {
+        return {
+            page: 'screens/Repository/Repository',
+            nav: repoNav(),
+            data: {
+                repoId: Number(repoId),
+                repoKey: repoKey || '',
+                repoName: repoName || ''
+            }
+        };
+    }
+
     if (!repoId) {
-        //  Deep link with no repository selected — go to the list (replace, so the
-        //  Back button doesn't return to this dead end).
-        Router.replace('/repositories');
+        SvnHubUI.routeTarget(fallbackReturnTo());
         return;
     }
 
-    let currentPath = '';
+    const initialFilesRoute = filesRouteFromUrl();
+    let currentPath = initialFilesRoute.path;
+    let currentFilePath = initialFilesRoute.filePath;
 
+    function ownerFromKey(key = repoKey) {
+        return key && key.indexOf('/') > -1 ? key.substring(0, key.indexOf('/')) : '';
+    }
+
+    $$('repo-owner').setValue(ownerFromKey());
     $$('repo-title').setValue(repoName || repoKey);
+    $$('repo-visibility').clear();
+    document.getElementById('repo-checkout-display').textContent = '';
     $$('back').onclick(() => {
-        Router.go('/repositories');
+        SvnHubUI.goBack(repoReturnTo, fallbackReturnTo());
     });
-    $$('go-issues').onclick(() => {
-        Router.go('/issues');
+    document.getElementById('repo-owner-link').addEventListener('click', () => {
+        const owner = ownerFromKey();
+        if (!owner)
+            return;
+        SvnHubUI.openPerson(owner, personReturnTarget());
     });
-    $$('go-mrs').onclick(() => {
-        Router.go('/merge-requests');
+    // ---- section views: the left menu switches the content panel IN PLACE ----
+    // Local panels live in this screen; the embed pages (Issues / Merge Requests /
+    // Insights) are loaded inline into #repo-embed-host so clicking a section never
+    // leaves the repository page. The selection is kept in a ?section= query param
+    // and pushed to browser history, so Back/Forward step through section choices
+    // (and eventually leave the page). Section history entries deliberately are NOT
+    // framework __kissRoute states, so the Kiss router ignores them and our own
+    // popstate handler below restores them.
+    const LOCAL_VIEWS = {'go-files': 'view-files', 'go-readme': 'view-readme', 'go-history': 'view-history'};
+    const EMBED_PAGES = {'go-issues': 'screens/Issues/Issues', 'go-mrs': 'screens/MergeRequests/MergeRequests', 'go-insights': 'screens/Insights/Insights'};
+    const MENU = ['go-files', 'go-readme', 'go-history', 'go-issues', 'go-mrs', 'go-insights'];
+    // The section rail uses plain buttons (not Kiss push-buttons) so items can carry
+    // count badges. Helpers below address them directly.
+    function menuEl(id) {
+        return document.getElementById(id);
+    }
+    function markActiveMenu(menuId) {
+        MENU.forEach((x) => {
+            const el = menuEl(x);
+            if (el)
+                el.classList.toggle('active', x === menuId);
+        });
+    }
+    const ALL_PANELS = ['view-history', 'view-files', 'view-readme', 'view-embed'];
+    const SECTION_OF = {'go-history': 'history', 'go-files': 'files', 'go-issues': 'issues', 'go-mrs': 'mrs', 'go-insights': 'insights', 'go-readme': 'readme'};
+    const MENU_OF_SECTION = {history: 'go-history', files: 'go-files', issues: 'go-issues', mrs: 'go-mrs', insights: 'go-insights', readme: 'go-readme'};
+    let contributorsLoaded = false;
+    let embedLoaded = null;
+    // Deep-link support: a referring screen (e.g. the dashboard activity feed)
+    // may ask for a specific section — and optionally a revision to focus in
+    // History — via saved data. These win over any stale ?section= in the URL.
+    let startMenu = MENU_OF_SECTION[new URLSearchParams(location.search).get('section')] || 'go-files';
+    if (pendingSection && MENU_OF_SECTION[pendingSection])
+        startMenu = MENU_OF_SECTION[pendingSection];
+    if (startMenu === 'go-insights' && guest)
+        startMenu = 'go-files';
+
+    function showInitialPanel(menuId) {
+        markActiveMenu(menuId);
+        ALL_PANELS.forEach((p) => {
+            const el = document.getElementById(p);
+            if (el)
+                el.style.display = 'none';
+        });
+        const panelId = LOCAL_VIEWS[menuId] || (EMBED_PAGES[menuId] ? 'view-embed' : LOCAL_VIEWS['go-files']);
+        const panel = document.getElementById(panelId);
+        if (panel)
+            panel.style.display = '';
+    }
+    showInitialPanel(startMenu);
+
+    // Switch the visible panel. Pure DOM/content work — never touches history.
+    async function applyView(menuId, filesRoute = null) {
+        markActiveMenu(menuId);
+        ALL_PANELS.forEach((p) => {
+            const el = document.getElementById(p);
+            if (el)
+                el.style.display = 'none';
+        });
+        if (LOCAL_VIEWS[menuId]) {
+            const el = document.getElementById(LOCAL_VIEWS[menuId]);
+            if (el)
+                el.style.display = '';
+            if (menuId === 'go-files')
+                await showFilesView(filesRoute);   // create/populate the grid now that it's visible
+            if (menuId === 'go-history') {
+                // Sync the sub-view (feed vs. in-place revision viewer) with ?rev=.
+                const rev = revFromUrl();
+                if (rev)
+                    await openRevision(rev, {writeHistory: false});
+                else
+                    showRevisionFeed();
+            }
+        } else if (EMBED_PAGES[menuId]) {
+            const host = document.getElementById('view-embed');
+            if (host)
+                host.style.display = '';
+            const page = EMBED_PAGES[menuId];
+            if (embedLoaded !== page) {
+                if (menuId === 'go-insights')
+                    Utils.saveData('insightsRepoId', repoId);
+                await Utils.loadPage(page, 'repo-embed-host');
+                embedLoaded = page;
+                if (Utils.setAppNavActive)
+                    Utils.setAppNavActive(repoNav());   // undo the embedded screen's own nav highlight
+            } else {
+                // Already-loaded embed (Issues / Merge Requests) may be showing a
+                // detail view; tell it to re-sync with the current URL params.
+                window.dispatchEvent(new CustomEvent('repo-embed-sync'));
+            }
+        }
+    }
+
+    function routeState(menuId, filesRoute = null) {
+        const section = SECTION_OF[menuId] || 'files';
+        const state = {__repoSection: section, repoId: repoId, repoKey: repoKey, repoName: repoName};
+        if (section === 'files') {
+            const route = filesRoute || {path: currentPath, filePath: currentFilePath};
+            state.path = normalizeRepoPath(route.path || '');
+            state.filePath = normalizeRepoPath(route.filePath || '');
+        }
+        return state;
+    }
+
+    function sectionUrl(menuId, filesRoute = null, keepTicket = false) {
+        const url = new URL(location.href);
+        const section = SECTION_OF[menuId] || 'files';
+        url.searchParams.set('section', section);
+        // Picking a section resets any detail deep link (?issue=, ?mr=, ?rev=) —
+        // except at page init (keepTicket), where they must survive so the
+        // corresponding view can restore the detail the URL names.
+        if (!keepTicket) {
+            url.searchParams.delete('issue');
+            url.searchParams.delete('mr');
+            url.searchParams.delete('rev');
+        }
+        if (section === 'files') {
+            const route = filesRoute || {path: currentPath, filePath: currentFilePath};
+            const filePath = normalizeRepoPath(route.filePath || '');
+            const path = filePath || normalizeRepoPath(route.path || '');
+            if (path)
+                url.searchParams.set('path', path);
+            else
+                url.searchParams.delete('path');
+            if (filePath)
+                url.searchParams.set('file', '1');
+            else
+                url.searchParams.delete('file');
+            url.searchParams.delete('view');
+        } else {
+            url.searchParams.delete('path');
+            url.searchParams.delete('file');
+            url.searchParams.delete('view');
+        }
+        return url.pathname + url.search + url.hash;
+    }
+
+    function writeRepoHistory(menuId, filesRoute = null, mode = 'push', keepTicket = false) {
+        try {
+            const url = sectionUrl(menuId, filesRoute, keepTicket);
+            const currentUrl = location.pathname + location.search + location.hash;
+            if (mode !== 'replace' && url === currentUrl)
+                return;
+            const method = mode === 'replace' ? 'replaceState' : 'pushState';
+            history[method](routeState(menuId, filesRoute), '', url);
+        } catch (e) { /* history not available */ }
+    }
+
+    // A user picking a section: add a history entry (so Back returns to the prior
+    // section) then render it.
+    async function selectView(menuId) {
+        writeRepoHistory(menuId);
+        await applyView(menuId);
+    }
+
+    // Restore the section on Back/Forward. Only one such handler is ever registered
+    // (each repo-page load removes the previous one first).
+    function repoSectionPopstate(e) {
+        const st = e.state;
+        let section = st && st.__repoSection;
+        if (!section) {
+            const params = new URLSearchParams(location.search || '');
+            const urlRepoId = Number(params.get('repoId'));
+            if (urlRepoId !== repoId || !params.get('section'))
+                return;                   // not one of ours — the Kiss router handles it
+            section = params.get('section');
+        }
+        const menuId = MENU_OF_SECTION[section] || 'go-files';
+        const filesRoute = menuId === 'go-files' ? filesRouteFromState(st) : null;
+        if (document.getElementById('repo-embed-host')) {
+            applyView(menuId, filesRoute); // repo page is loaded — switch in place
+        } else {
+            // We had navigated away; bring the repo page back at this section.
+            Utils.saveData('repoId', (st && st.repoId) || repoId);
+            Utils.saveData('repoKey', (st && st.repoKey) || repoKey);
+            Utils.saveData('repoName', (st && st.repoName) || repoName);
+            Utils.loadPage('screens/Repository/Repository', 'app-screen-area');
+        }
+    }
+    if (window.__repoSectionPopstate)
+        window.removeEventListener('popstate', window.__repoSectionPopstate);
+    window.__repoSectionPopstate = repoSectionPopstate;
+    window.addEventListener('popstate', repoSectionPopstate);
+
+    menuEl('go-history').addEventListener('click', () => selectView('go-history'));
+    menuEl('go-files').addEventListener('click', () => selectView('go-files'));
+    menuEl('go-issues').addEventListener('click', () => selectView('go-issues'));
+    menuEl('go-mrs').addEventListener('click', () => selectView('go-mrs'));
+    menuEl('go-insights').addEventListener('click', () => {
+        if (guest)
+            return;
+        selectView('go-insights');
+    });
+    menuEl('go-readme').addEventListener('click', () => selectView('go-readme'));
+
+    async function loadAboutContributors() {
+        if (contributorsLoaded)
+            return;
+        contributorsLoaded = true;
+        if (guest) {
+            document.getElementById('about-contributors').innerHTML = '<p class="muted" style="margin:0;">Sign in to see contributor activity.</p>';
+            return;
+        }
+        const today = (typeof DateUtils !== 'undefined') ? DateUtils.today() : 20260101;
+        const res = await Server.call(WS_STATS, 'contributors', {repoId: repoId, beginDay: 19900101, endDay: today, limit: 8});
+        // The stats service also counts checkout/update events, which surfaces
+        // "(unmapped)" rows with zero commits — not contributors; drop them here.
+        const rows = (res._Success && res.rows)
+            ? res.rows
+                .map((r) => ({userName: r.username, handle: r.handle, commits: Number(r.commits) || 0}))
+                .filter((r) => r.commits > 0)
+            : [];
+        document.getElementById('about-contributors').innerHTML = SvnHubUI.contributorBars(rows);
+    }
+    document.getElementById('about-contributors').addEventListener('click', (e) => {
+        const person = e.target.closest('[data-contributor-handle]');
+        if (!person)
+            return;
+        SvnHubUI.openPerson(person.getAttribute('data-contributor-handle'), personReturnTarget());
     });
 
     // ---- helpers ----
     function join(base, name) {
         return base ? base + '/' + name : name;
     }
-    function parent(path) {
-        const i = path.lastIndexOf('/');
-        return i < 0 ? '' : path.substring(0, i);
+    function normalizeRepoPath(path) {
+        return String(path || '').replace(/^\/+/, '').replace(/\/+/g, '/').replace(/\/+$/, '');
+    }
+    function parentPath(path) {
+        const p = normalizeRepoPath(path);
+        const i = p.lastIndexOf('/');
+        return i >= 0 ? p.substring(0, i) : '';
+    }
+    function filesRouteFromUrl() {
+        const params = new URLSearchParams(location.search || '');
+        const routePath = normalizeRepoPath(params.get('path') || pendingRepoPath || '');
+        const isFile = params.get('file') === '1' || params.get('view') === 'file' || pendingRepoFile;
+        return isFile && routePath
+            ? {path: parentPath(routePath), filePath: routePath}
+            : {path: routePath, filePath: ''};
+    }
+    function filesRouteFromState(st) {
+        const fromUrl = filesRouteFromUrl();
+        const filePath = normalizeRepoPath(st && st.filePath != null ? st.filePath : fromUrl.filePath);
+        const path = normalizeRepoPath(st && st.path != null ? st.path : fromUrl.path);
+        return filePath ? {path: parentPath(filePath), filePath: filePath} : {path: path, filePath: ''};
     }
     function escapeHtml(s) {
-        return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
     function fmtDate(ms) {
         if (!ms)
@@ -49,10 +333,113 @@
             return '' + ms;
         }
     }
+    function fmtSize(b) {
+        if (b == null)
+            return '–';
+        const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0, n = b;
+        while (n >= 1024 && i < u.length - 1) {
+            n /= 1024;
+            i++;
+        }
+        return (i === 0 ? n : n.toFixed(1)) + ' ' + u[i];
+    }
+    function basename(path) {
+        const p = (path || '').replace(/\/$/, '');
+        const i = p.lastIndexOf('/');
+        return i >= 0 ? p.substring(i + 1) : p;
+    }
+    function setFact(id, val) {
+        const el = document.getElementById(id);
+        if (el)
+            el.textContent = (val == null || val === '') ? '–' : val;
+    }
+    // Count badge on a section rail item; hidden while zero to keep the rail quiet.
+    function setNavCount(id, n) {
+        const el = document.getElementById(id);
+        if (!el)
+            return;
+        const count = Number(n) || 0;
+        el.textContent = count;
+        el.hidden = count <= 0;
+    }
+    function backgroundLoad(label, load) {
+        return Promise.resolve()
+            .then(load)
+            .catch((e) => {
+                console.error('Repository ' + label + ' load failed', e);
+            });
+    }
 
     // ---- browse grid ----
+    // Map file extensions to Devicon font classes (https://devicon.dev).
+    // Directories and unmapped types fall back to inline SVGs so every row gets
+    // a recognizable glyph instead of the raw "dir"/"file" text.
+    const FILE_ICON_BY_EXT = {
+        js: 'devicon-javascript-plain', mjs: 'devicon-javascript-plain', cjs: 'devicon-javascript-plain',
+        ts: 'devicon-typescript-plain',
+        jsx: 'devicon-react-plain', tsx: 'devicon-react-plain',
+        json: 'devicon-json-plain',
+        html: 'devicon-html5-plain', htm: 'devicon-html5-plain',
+        css: 'devicon-css3-plain', scss: 'devicon-sass-plain', sass: 'devicon-sass-plain', less: 'devicon-less-plain',
+        xml: 'devicon-xml-plain',
+        py: 'devicon-python-plain', pyw: 'devicon-python-plain',
+        java: 'devicon-java-plain',
+        c: 'devicon-c-plain', h: 'devicon-c-plain',
+        cpp: 'devicon-cplusplus-plain', cc: 'devicon-cplusplus-plain', cxx: 'devicon-cplusplus-plain', hpp: 'devicon-cplusplus-plain',
+        cs: 'devicon-csharp-plain',
+        go: 'devicon-go-plain',
+        rs: 'devicon-rust-plain',
+        rb: 'devicon-ruby-plain',
+        php: 'devicon-php-plain',
+        swift: 'devicon-swift-plain',
+        kt: 'devicon-kotlin-plain', kts: 'devicon-kotlin-plain',
+        scala: 'devicon-scala-plain', sc: 'devicon-scala-plain',
+        sh: 'devicon-bash-plain', bash: 'devicon-bash-plain', zsh: 'devicon-bash-plain',
+        ps1: 'devicon-powershell-plain',
+        md: 'devicon-markdown-plain', markdown: 'devicon-markdown-plain',
+        yml: 'devicon-yaml-plain', yaml: 'devicon-yaml-plain',
+        sql: 'devicon-sqlite-plain',
+        vue: 'devicon-vuejs-plain',
+        svelte: 'devicon-svelte-plain',
+        lua: 'devicon-lua-plain',
+        dart: 'devicon-dart-plain',
+        elixir: 'devicon-elixir-plain', ex: 'devicon-elixir-plain', exs: 'devicon-elixir-plain',
+        clj: 'devicon-clojure-plain', cljs: 'devicon-clojurescript-plain',
+        hs: 'devicon-haskell-plain',
+        pl: 'devicon-perl-plain',
+        r: 'devicon-r-plain',
+        zig: 'devicon-zig-plain',
+        nim: 'devicon-nim-plain',
+        jl: 'devicon-julia-plain',
+        tf: 'devicon-terraform-plain',
+        gradle: 'devicon-gradle-plain'
+    };
+    const FOLDER_SVG = '<svg class="file-kind-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M1.75 2A1.75 1.75 0 0 0 0 3.75v8.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7A1.75 1.75 0 0 0 14.25 3.5H6.59L5.28 2.22A.75.75 0 0 0 4.75 2H1.75Z"/></svg>';
+    const GENERIC_FILE_SVG = '<svg class="file-kind-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M9.5 1H3.75A1.75 1.75 0 0 0 2 2.75v10.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0 0 14 13.25V5.5L9.5 1Zm0 1.5L12.5 5.5H9.5V2.5Z"/></svg>';
+    function fileKindCellRenderer(params) {
+        if (!params || !params.data)
+            return '';
+        const data = params.data;
+        if (data.kind === 'dir')
+            return FOLDER_SVG;
+        const dot = data.name.lastIndexOf('.');
+        if (dot >= 0) {
+            const ext = data.name.substring(dot + 1).toLowerCase();
+            const cls = FILE_ICON_BY_EXT[ext];
+            if (cls)
+                return '<i class="' + cls + ' file-kind-icon" aria-hidden="true"></i>';
+        }
+        // Special filename overrides
+        const lower = data.name.toLowerCase();
+        if (lower === 'dockerfile')
+            return '<i class="devicon-docker-plain file-kind-icon" aria-hidden="true"></i>';
+        if (lower === 'license' || lower === 'license.txt' || lower === 'license.md')
+            return GENERIC_FILE_SVG;
+        return GENERIC_FILE_SVG;
+    }
     const browseCols = [
-        {headerName: '', field: 'icon', width: 40},
+        {headerName: 'Kind', field: 'icon', width: 72, cellRenderer: fileKindCellRenderer},
         {headerName: 'Name', field: 'name', flex: 2},
         {headerName: 'Rev', field: 'revision', width: 80},
         {headerName: 'Author', field: 'author', width: 120},
@@ -60,21 +447,138 @@
         {headerName: 'Last message', field: 'message', flex: 3}
     ];
     const browseGrid = new AGGrid('browse-grid', browseCols, 'name');
-    browseGrid.show();
-    browseGrid.setOnRowDoubleClicked(() => {
-        const row = browseGrid.getSelectedRow();
-        if (!row)
+    // AG-Grid must be created while its container is VISIBLE. Creating it inside a
+    // display:none panel (as the old code did at screen init) leaves AG-Grid unable
+    // to measure its viewport, so rows intermittently fail to render (a resize only
+    // re-fits columns, it does not re-lay-out the body). We therefore create the grid
+    // lazily the first time the Files section is actually shown.
+    let gridShown = false;
+    let filesLoaded = false;
+    function ensureGrid() {
+        if (!gridShown) {
+            browseGrid.show();
+            gridShown = true;
+        }
+    }
+    function showDirectoryList(resize = true) {
+        currentFilePath = '';
+        const gridEl = document.getElementById('browse-grid');
+        const viewer = document.getElementById('file-viewer');
+        if (gridEl)
+            gridEl.style.display = '';
+        if (viewer)
+            viewer.style.display = 'none';
+        if (resize && gridShown)
+            window.dispatchEvent(new Event('resize'));
+    }
+    function showInlineFile() {
+        const gridEl = document.getElementById('browse-grid');
+        const viewer = document.getElementById('file-viewer');
+        if (gridEl)
+            gridEl.style.display = 'none';
+        if (viewer)
+            viewer.style.display = '';
+    }
+    async function restoreFilesRoute(filesRoute) {
+        const filePath = normalizeRepoPath(filesRoute && filesRoute.filePath);
+        currentFilePath = filePath;
+        currentPath = filePath ? parentPath(filePath) : normalizeRepoPath(filesRoute && filesRoute.path);
+        filesLoaded = true;
+        if (filePath) {
+            await loadDir({showList: false});
+            const ok = await openFile(filePath, basename(filePath), {writeHistory: false});
+            if (!ok)
+                showDirectoryList();
+        } else {
+            await loadDir();
+        }
+    }
+    async function showFilesView(filesRoute = null) {
+        ensureGrid();
+        if (filesRoute) {
+            await restoreFilesRoute(filesRoute);
             return;
+        }
+        if (!filesLoaded) {
+            filesLoaded = true;
+            if (currentFilePath)
+                await restoreFilesRoute({path: currentPath, filePath: currentFilePath});
+            else
+                await loadDir();
+        } else if (currentFilePath) {
+            showInlineFile();
+        } else {
+            showDirectoryList();   // re-fit columns now that it's visible
+        }
+    }
+    // Single click opens directories and files (a browser, not a data-entry grid).
+    // The selection is cleared immediately afterwards so re-clicking the same row
+    // (e.g. after backing out of the file viewer) fires again.
+    let suppressBrowseSelect = false;
+    browseGrid.setOnSelectionChanged((rows) => {
+        if (suppressBrowseSelect || !rows || rows.length !== 1)
+            return;
+        const row = rows[0];
+        suppressBrowseSelect = true;
+        try {
+            browseGrid.deselectAll();
+        } finally {
+            suppressBrowseSelect = false;
+        }
         if (row.kind === 'dir') {
-            currentPath = join(currentPath, row.name);
-            loadDir();
+            navigateDir(join(currentPath, row.name));
         } else {
             openFile(join(currentPath, row.name), row.name);
         }
     });
 
-    async function loadDir() {
-        $$('crumb').setValue('/' + currentPath);
+    // Clickable path breadcrumb (repo root / trunk / sub / …). Each segment except
+    // the last navigates to that prefix — this replaces the old "Up" button.
+    function renderCrumb() {
+        const host = document.getElementById('browse-crumb');
+        if (!host)
+            return;
+        const rootLabel = repoName || repoKey || 'root';
+        const parts = currentPath ? currentPath.split('/') : [];
+        let html = '<button type="button" class="crumb-seg' + (parts.length ? '' : ' current') +
+            '" data-path="">' + escapeHtml(rootLabel) + '</button>';
+        let acc = '';
+        parts.forEach((seg, i) => {
+            acc = acc ? acc + '/' + seg : seg;
+            const current = (i === parts.length - 1) ? ' current' : '';
+            html += '<span class="crumb-sep">/</span>' +
+                '<button type="button" class="crumb-seg' + current + '" data-path="' + escapeHtml(acc) + '">' +
+                escapeHtml(seg) + '</button>';
+        });
+        host.innerHTML = html;
+    }
+
+    function updateRootsActive() {
+        const root = currentPath ? currentPath.split('/')[0] : '';
+        [['root-trunk', 'trunk'], ['root-branches', 'branches'], ['root-tags', 'tags']].forEach(([id, name]) => {
+            const el = document.getElementById(id);
+            if (el)
+                el.classList.toggle('active', root === name);
+        });
+    }
+
+    const crumbHost = document.getElementById('browse-crumb');
+    if (crumbHost)
+        crumbHost.addEventListener('click', (e) => {
+            const btn = e.target.closest('.crumb-seg');
+            if (!btn)
+                return;
+            const p = btn.getAttribute('data-path') || '';
+            if (p === currentPath)
+                return;
+            navigateDir(p);
+        });
+
+    async function loadDir(options = {}) {
+        if (options.showList !== false)
+            showDirectoryList(false);
+        renderCrumb();
+        updateRootsActive();
         browseGrid.clear();
         const res = await Server.call(WS_BROWSE, 'listDir', {repoId: repoId, path: currentPath});
         if (res._Success) {
@@ -82,7 +586,7 @@
             const rows = res.entries.map((e) => ({
                 name: e.name,
                 kind: e.kind,
-                icon: e.kind === 'dir' ? '\u{1F4C1}' : '\u{1F4C4}',
+                icon: e.kind === 'dir' ? 'dir' : 'file',
                 revision: e.revision,
                 author: e.author,
                 dateStr: fmtDate(e.date),
@@ -95,19 +599,26 @@
             });
             browseGrid.addRecords(rows);
         }
-        loadReadme();
     }
 
-    $$('up').onclick(() => {
-        if (!currentPath)
-            return;
-        currentPath = parent(currentPath);
-        loadDir();
-    });
+    // Jump to a root from the chips beside the breadcrumb: switch to the Files
+    // section (creating the grid on first use), then list the path.
+    async function navigateDir(path, mode = 'push') {
+        const route = {path: normalizeRepoPath(path), filePath: ''};
+        currentPath = route.path;
+        currentFilePath = '';
+        writeRepoHistory('go-files', route, mode);
+        await applyView('go-files', route);
+    }
+    document.getElementById('root-trunk').addEventListener('click', () => navigateDir('trunk'));
+    document.getElementById('root-branches').addEventListener('click', () => navigateDir('branches'));
+    document.getElementById('root-tags').addEventListener('click', () => navigateDir('tags'));
 
-    // ---- README ----
+    // ---- README (checks trunk then root; the menu item only appears when one exists) ----
     async function loadReadme() {
-        const res = await Server.call(WS_BROWSE, 'readme', {repoId: repoId, path: currentPath});
+        let res = await Server.call(WS_BROWSE, 'readme', {repoId: repoId, path: 'trunk'});
+        if (!(res._Success && res.found))
+            res = await Server.call(WS_BROWSE, 'readme', {repoId: repoId, path: ''});
         if (res._Success && res.found) {
             let html;
             if (res.isMarkdown && typeof marked !== 'undefined')
@@ -116,21 +627,46 @@
                 html = '<pre>' + escapeHtml(res.content) + '</pre>';
             $$('readme').setHTMLValue(html);
         } else {
-            $$('readme').setValue('No README in this directory.');
+            $$('readme').setValue('No README in this repository.');
         }
     }
 
-    // ---- file view popup ----
-    async function openFile(path, name) {
+    // ---- inline file viewer ----
+    const HIGHLIGHT_MAX_BYTES = 200000;   // hljs on very large files janks the page
+    let rawFile = null;                   // {name, content} for the View-raw button
+    async function openFile(path, name, options = {}) {
+        path = normalizeRepoPath(path);
         const res = await Server.call(WS_BROWSE, 'cat', {repoId: repoId, path: path});
         if (!res._Success)
-            return;
-        $$('fp-title').setValue(path);
+            return false;
+        currentPath = parentPath(path);
+        currentFilePath = path;
+        renderCrumb();
+        updateRootsActive();
+        if (options.writeHistory !== false)
+            writeRepoHistory('go-files', {path: currentPath, filePath: currentFilePath});
+        const title = document.getElementById('file-title');
+        const meta = document.getElementById('file-meta');
+        const body = document.getElementById('file-viewer-body');
+        const content = document.getElementById('file-content');
+        if (title)
+            title.textContent = name || basename(path);
+        if (meta)
+            meta.textContent = path + ' · ' + fmtSize(res.size);
+        if (body)
+            body.classList.toggle('is-binary', res.binary === true);
         if (res.binary) {
-            $$('fp-content').setValue('Binary file (' + res.size + ' bytes) — cannot display.');
+            rawFile = null;
+            $$('file-raw').disable();
+            if (content) {
+                content.className = '';
+                content.textContent = 'Binary file (' + fmtSize(res.size) + ') cannot be displayed inline.';
+            }
         } else {
+            rawFile = {name: name || basename(path), content: res.content || ''};
+            $$('file-raw').enable();
             let inner;
-            if (typeof hljs !== 'undefined') {
+            if (typeof hljs !== 'undefined' && (res.content || '').length <= HIGHLIGHT_MAX_BYTES) {
                 try {
                     inner = hljs.highlightAuto(res.content).value;
                 } catch (e) {
@@ -139,63 +675,615 @@
             } else {
                 inner = escapeHtml(res.content);
             }
-            $$('fp-content').setHTMLValue('<code class="hljs">' + inner + '</code>');
+            if (content) {
+                content.className = 'hljs';
+                content.innerHTML = inner;
+            }
         }
-        Utils.popup_open('file-popup');
+        showInlineFile();
+        return true;
     }
-    $$('fp-close').onclick(() => Utils.popup_close());
-
-    // ---- commits ----
-    const commitCols = [
-        {headerName: 'Rev', field: 'revision', width: 80},
-        {headerName: 'Author', field: 'author', width: 130},
-        {headerName: 'Date', field: 'dateStr', width: 170},
-        {headerName: 'Message', field: 'message', flex: 3}
-    ];
-    const commitGrid = new AGGrid('commits-grid', commitCols, 'revision');
-    commitGrid.show();
-    commitGrid.setOnRowDoubleClicked(() => {
-        const row = commitGrid.getSelectedRow();
-        if (row)
-            openRevision(row.revision);
+    $$('file-back').onclick(() => navigateDir(currentPath));
+    // Open the raw file text in a new tab via a blob URL (no server round trip).
+    $$('file-raw').onclick(() => {
+        if (!rawFile)
+            return;
+        const blob = new Blob([rawFile.content], {type: 'text/plain;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
     });
 
+    // ---- revision feed (the central line) ----
+    const AMD = {A: 'add', M: 'mod', D: 'del', R: 'rep'};
+
+    function pathBadges(paths) {
+        if (!paths || !paths.length)
+            return '';
+        let h = paths.slice(0, 4).map((p) => {
+            const t = (p.type || 'M').toUpperCase();
+            const cls = AMD[t] || 'mod';
+            const name = (p.path || '').replace(/^\/(trunk|branches|tags)\//, '');
+            return '<span class="rev-path"><span class="amd amd-' + cls + '">' + escapeHtml(t) + '</span>' +
+                '<span class="mono">' + escapeHtml(name || p.path) + '</span></span>';
+        }).join('');
+        if (paths.length > 4)
+            h += '<span class="rev-more">+' + (paths.length - 4) + ' more</span>';
+        return h;
+    }
+
     async function loadCommits() {
-        commitGrid.clear();
-        const res = await Server.call(WS_HIST, 'log', {repoId: repoId, path: '', limit: 50});
+        const feed = document.getElementById('revision-feed');
+        const res = await Server.call(WS_HIST, 'log', {repoId: repoId, path: '', limit: 40, withPaths: true});
+        if (!res._Success) {
+            feed.innerHTML = '<p class="muted">No history available.</p>';
+            return;
+        }
+        const commits = res.commits.filter((c) => c.revision > 0);
+        $$('rev-count').setValue(commits.length + (commits.length === 1 ? ' revision' : ' revisions'));
+        if (!commits.length) {
+            feed.innerHTML = '<p class="muted">No revisions yet.</p>';
+            return;
+        }
+        feed.innerHTML = commits.map((c) => {
+            const badges = pathBadges(c.paths);
+            return '<div class="rev-node" data-rev="' + c.revision + '" tabindex="0">' +
+                '<div class="rev-dot">' + c.revision + '</div>' +
+                '<div class="rev-body">' +
+                    '<div class="rev-msg">' + escapeHtml(c.message || '(no message)') + '</div>' +
+                    '<div class="rev-meta">' +
+                        '<span class="rev-author">' + escapeHtml(c.author || 'unknown') + '</span>' +
+                        '<span class="rev-dotsep">·</span><span>' + escapeHtml(fmtDate(c.date)) + '</span>' +
+                        '<span class="rev-dotsep">·</span><span class="mono">r' + c.revision + '</span>' +
+                    '</div>' +
+                    (badges ? '<div class="rev-paths">' + badges + '</div>' : '') +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    const feedEl = document.getElementById('revision-feed');
+    feedEl.addEventListener('click', (e) => {
+        const node = e.target.closest('.rev-node');
+        if (node)
+            openRevision(Number(node.getAttribute('data-rev')));
+    });
+    feedEl.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter')
+            return;
+        const node = e.target.closest('.rev-node');
+        if (node)
+            openRevision(Number(node.getAttribute('data-rev')));
+    });
+
+    // ---- in-place revision viewer (full-width diffs, ?rev=N deep link) ----
+    let currentRev = 0;
+
+    function revFromUrl() {
+        const v = new URLSearchParams(location.search || '').get('rev') || '';
+        return /^\d+$/.test(v) ? Number(v) : 0;
+    }
+    function writeRevHistory(rev, mode = 'push') {
+        try {
+            const url = new URL(location.href);
+            if (rev)
+                url.searchParams.set('rev', rev);
+            else
+                url.searchParams.delete('rev');
+            const target = url.pathname + url.search + url.hash;
+            const currentUrl = location.pathname + location.search + location.hash;
+            if (mode !== 'replace' && target === currentUrl)
+                return;
+            const state = Object.assign({}, history.state || {},
+                {__repoSection: 'history', repoId: repoId, repoKey: repoKey, repoName: repoName, rev: rev || 0});
+            history[mode === 'replace' ? 'replaceState' : 'pushState'](state, '', target);
+        } catch (e) { /* history not available */ }
+    }
+    function showRevisionFeed() {
+        currentRev = 0;
+        const viewer = document.getElementById('rev-viewer');
+        const feedWrap = document.getElementById('rev-feed-wrap');
+        if (viewer)
+            viewer.style.display = 'none';
+        if (feedWrap)
+            feedWrap.style.display = '';
+    }
+    async function openRevision(rev, options = {}) {
+        currentRev = rev;
+        if (options.writeHistory !== false)
+            writeRevHistory(rev);
+        document.getElementById('rev-feed-wrap').style.display = 'none';
+        document.getElementById('rev-viewer').style.display = '';
+        document.getElementById('rev-title').textContent = 'Revision ' + rev;
+        document.getElementById('rev-meta').textContent = '';
+        document.getElementById('rev-message').innerHTML = '';
+        const host = document.getElementById('rev-diff-host');
+        host.innerHTML = SvnHubUI.spinner('Loading diff…');
+        const res = await Server.call(WS_HIST, 'revisionDetail', {repoId: repoId, revision: rev});
+        if (currentRev !== rev || !document.getElementById('rev-diff-host'))
+            return;                       // user moved on while we were fetching
+        if (!res._Success) {
+            host.innerHTML = '<p class="muted" style="margin:0;">Unable to load this revision.</p>';
+            return;
+        }
+        document.getElementById('rev-meta').textContent =
+            (res.author || 'unknown') + ' · ' + fmtDate(res.date) + ' · r' + rev;
+        document.getElementById('rev-message').innerHTML = SvnHubUI.commitMessage(res.message);
+        SvnHubUI.renderUnifiedDiff(host, res.diff);
+    }
+    $$('rev-back').onclick(() => {
+        showRevisionFeed();
+        writeRevHistory(0, 'replace');
+    });
+
+    // ---- init ----
+    if (Utils.setAppNavActive)
+        Utils.setAppNavActive(repoNav());
+    if (guest)
+        menuEl('go-insights').style.display = 'none';
+    let checkoutUrl = '';
+    let checkoutFeedbackTimer = null;
+    function showCheckoutFeedback(message) {
+        const btn = document.getElementById('checkout-btn');
+        const text = document.getElementById('checkout-feedback-text');
+        if (!btn || !text)
+            return;
+        text.textContent = message;
+        btn.classList.add('copied');
+        clearTimeout(checkoutFeedbackTimer);
+        checkoutFeedbackTimer = setTimeout(() => btn.classList.remove('copied'), 1500);
+    }
+    function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        let ok = false;
+        try {
+            ok = document.execCommand('copy');
+        } catch (e) {
+            ok = false;
+        }
+        document.body.removeChild(ta);
+        return ok;
+    }
+    document.getElementById('checkout-btn').addEventListener('click', () => {
+        const cmd = 'svn checkout ' + (checkoutUrl || '');
+        if (!checkoutUrl)
+            return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(cmd).then(
+                () => showCheckoutFeedback('Copied to clipboard'),
+                () => showCheckoutFeedback(fallbackCopy(cmd) ? 'Copied to clipboard' : 'Copy failed'));
+        } else {
+            showCheckoutFeedback(fallbackCopy(cmd) ? 'Copied to clipboard' : 'Copy failed');
+        }
+    });
+
+    // Open the requested section immediately. The surrounding overview cards and
+    // secondary panels load in the background, so a slow README/history/stats call
+    // cannot leave the visible Files section as an empty shell.
+    const startFilesRoute = startMenu === 'go-files' ? {path: currentPath, filePath: currentFilePath} : null;
+    writeRepoHistory(startMenu, startFilesRoute, 'replace', true);
+    backgroundLoad('initial view', () => applyView(startMenu, startFilesRoute));
+
+    const commitsLoad = backgroundLoad('history', loadCommits);
+    backgroundLoad('README', loadReadme);
+    backgroundLoad('overview', loadAbout);
+    backgroundLoad('contributors', loadAboutContributors);
+    if (pendingRevision && startMenu === 'go-history')
+        commitsLoad.then(() => focusRevision(pendingRevision));
+
+    let repoRes = {_Success: false};
+    try {
+        repoRes = await Server.call(WS_REPO, 'getRepository', {repoId: repoId});
+    } catch (e) {
+        console.error('Repository metadata load failed', e);
+    }
+    if (repoRes._Success && repoRes.repo) {
+        const repo = repoRes.repo;
+        repoKey = repo.repoKey || repoKey;
+        repoName = repo.name || repoName || repo.repoKey;
+        Utils.saveData('repoKey', repoKey);
+        Utils.saveData('repoName', repoName);
+        $$('repo-owner').setValue(ownerFromKey(repoKey));
+        $$('repo-title').setValue(repoName || repoKey);
+        checkoutUrl = repo.checkoutUrl || '';
+        $$('repo-head').setValue('HEAD r' + (repo.headRevision || 0));   // set now; loadDir is lazy
+        $$('repo-visibility').setValue(repo.visibility || 'repository');
+        document.getElementById('repo-checkout-display').textContent = repo.checkoutUrl || document.getElementById('repo-checkout-display').textContent;
+        setNavCount('count-issues', repo.openIssueCount || 0);
+        setNavCount('count-mrs', repo.openMergeRequestCount || 0);
+        document.getElementById('repo-subhead').textContent = repo.description || '';
+        setFact('fact-head', 'r' + (repo.headRevision || 0));
+        setFact('fact-issues', repo.openIssueCount || 0);
+        setFact('fact-mrs', repo.openMergeRequestCount || 0);
+        setFact('fact-created', fmtDate(repo.createdTs));
+        renderCrumb();
+    }
+
+    // ---- manage repository (edit metadata / access) — repo admins only ----
+    const currentRepo = (repoRes._Success && repoRes.repo) ? repoRes.repo : null;
+    const canAdminRepo = !!(repoRes._Success && repoRes.access && repoRes.access.admin);
+    if (canAdminRepo && currentRepo)
+        document.getElementById('repo-header-actions').hidden = false;
+
+    const reErr = document.getElementById('re-name-err');
+    function showEditRepoError(msg) {
+        reErr.textContent = msg || '';
+        reErr.classList.toggle('show', !!msg);
+        $$('re-name').element.classList.toggle('input-bad', !!msg);
+    }
+    function editRepoNameProblem(name) {
+        if (!name)
+            return 'A display name is required.';
+        if (name.length > 100)
+            return 'Use 100 characters or fewer.';
+        if (name.indexOf('/') >= 0)
+            return 'The display name cannot contain a slash.';
+        return '';
+    }
+    function setEditRepoVisibility(visibility) {
+        const radio = document.getElementById(visibility === 'public' ? 're-vis-public' : 're-vis-private');
+        if (radio)
+            radio.checked = true;
+    }
+    function getEditRepoVisibility() {
+        const radio = document.querySelector('input[type=radio][name="re-vis"]:checked');
+        return radio ? radio.value : 'private';
+    }
+    function openEditRepo() {
+        if (!currentRepo)
+            return;
+        $$('re-name').setValue(currentRepo.name || '');
+        $$('re-desc').setValue(currentRepo.description || '');
+        $$('re-default-branch').setValue(currentRepo.defaultBranch || '');
+        setEditRepoVisibility(currentRepo.visibility);
+        document.getElementById('re-svn-url').textContent = currentRepo.checkoutUrl || repoKey || '';
+        showEditRepoError('');
+        Utils.popup_open('repo-edit-popup', 're-name');
+    }
+    async function submitEditRepo() {
+        const name = $$('re-name').getValue().trim();
+        const problem = editRepoNameProblem(name);
+        if (problem) {
+            showEditRepoError(problem);
+            $$('re-name').focus();
+            return;
+        }
+        showEditRepoError('');
+        const description = $$('re-desc').getValue().trim();
+        const defaultBranch = $$('re-default-branch').getValue().trim();
+        const visibility = getEditRepoVisibility();
+        const res = await Server.call(WS_REPO, 'updateRepository', {
+            repoId: repoId,
+            name: name,
+            description: description,
+            defaultBranch: defaultBranch,
+            visibility: visibility
+        });
+        if (!res._Success)
+            return;
+        Utils.popup_close();
+        Utils.toast.success('Repository saved');
+        // Reflect the changes in place — no full reload needed.
+        currentRepo.name = name;
+        currentRepo.description = description;
+        currentRepo.defaultBranch = defaultBranch;
+        currentRepo.visibility = visibility;
+        repoName = name;
+        Utils.saveData('repoName', repoName);
+        $$('repo-title').setValue(repoName);
+        $$('repo-visibility').setValue(visibility);
+        document.getElementById('repo-subhead').textContent = description || '';
+    }
+    $$('repo-edit-btn').onclick(openEditRepo);
+    $$('re-cancel').onclick(() => Utils.popup_close());
+    $$('re-submit').onclick(submitEditRepo);
+    $$('re-name').onEnter(submitEditRepo);
+    $$('re-desc').onEnter(submitEditRepo);
+    $$('re-default-branch').onEnter(submitEditRepo);
+
+    // ---- access management -------------------------------------------------
+    // A two-pane popup: the list of people with access, and an add/edit pane
+    // that slides in (login-page style). The user picker is a type-ahead search
+    // over all active users, so it stays usable with thousands of accounts.
+    const ACC_AVATARS = ['#1f5d57', '#809cc9', '#5768a4', '#6b2c4e', '#3a4f86', '#c08a1a', '#2c7a72'];
+    let accUsers = [];          // every active user: {userId, userName, fullName}
+    let accRows = [];           // current grants (rows from getAccess)
+    let accGrantByUser = {};    // userId -> grant row
+    let accChosen = null;       // user selected in the add/edit pane
+    let accEditing = false;     // true when opened from an existing grant
+
+    function accAvatar(userId, name) {
+        const color = ACC_AVATARS[Math.abs(Number(userId) || 0) % ACC_AVATARS.length];
+        return '<span class="acc-av" style="background:' + color + '">' +
+            escapeHtml(SvnHubUI.personInitials(name)) + '</span>';
+    }
+    function accPermChips(r) {
+        let h = '';
+        if (r.canRead === 'Y')
+            h += '<span class="acc-chip read">Read</span>';
+        if (r.canWrite === 'Y')
+            h += '<span class="acc-chip write">Write</span>';
+        if (r.canAdmin === 'Y')
+            h += '<span class="acc-chip admin">Admin</span>';
+        if (!h)
+            h = '<span class="acc-chip none">No access</span>';
+        if (r.hasSvnPassword !== 'Y')
+            h += '<span class="acc-chip nopw" title="This user has not set an SVN password yet and cannot authenticate to svnserve.">no SVN pw</span>';
+        return h;
+    }
+
+    function renderAccessPeople() {
+        const host = document.getElementById('acc-people');
+        const count = document.getElementById('acc-count');
+        count.textContent = accRows.length + (accRows.length === 1 ? ' person' : ' people');
+        if (!accRows.length) {
+            host.innerHTML = '<p class="muted acc-empty">Nobody has been granted access yet. Use “+ Add user” to invite someone.</p>';
+            return;
+        }
+        host.innerHTML = accRows.map((r) => {
+            return '<div class="acc-person" data-user-id="' + r.userId + '" tabindex="0" role="button" ' +
+                    'aria-label="Edit access for ' + escapeHtml(r.userName) + '">' +
+                accAvatar(r.userId, r.fullName || r.userName) +
+                '<div class="acc-person-names">' +
+                    '<div class="acc-person-name">' + escapeHtml(r.userName) + '</div>' +
+                    (r.fullName ? '<div class="acc-person-full muted">' + escapeHtml(r.fullName) + '</div>' : '') +
+                '</div>' +
+                '<div class="acc-person-chips">' + accPermChips(r) + '</div>' +
+                '<button type="button" class="acc-person-remove" data-remove="' + r.userId + '" ' +
+                    'title="Remove access" aria-label="Remove access for ' + escapeHtml(r.userName) + '">&times;</button>' +
+            '</div>';
+        }).join('');
+    }
+
+    async function loadAccess() {
+        const res = await Server.call(WS_ACC, 'getAccess', {repoId: repoId});
+        if (!res._Success)
+            return false;
+        accRows = res.rows || [];
+        accUsers = res.availableUsers || [];
+        accGrantByUser = {};
+        accRows.forEach((r) => {
+            accGrantByUser[r.userId] = r;
+        });
+        renderAccessPeople();
+        return true;
+    }
+
+    function showAccPane(which) {
+        document.getElementById('acc-stage').classList.toggle('show-edit', which === 'edit');
+    }
+
+    // ---- add / edit pane ----
+    function setChosenUser(u, grant) {
+        accChosen = u;
+        const searchField = document.getElementById('acc-search-field');
+        const chosen = document.getElementById('acc-chosen');
+        const editPane = document.getElementById('acc-pane-edit');
+        const perms = document.getElementById('acc-perms');
+        const actions = document.querySelector('#acc-pane-edit .acc-edit-actions');
+        if (!u) {
+            accEditing = false;
+            editPane.classList.add('is-searching');
+            searchField.hidden = false;
+            chosen.hidden = true;
+            perms.hidden = true;
+            actions.hidden = true;
+            document.getElementById('acc-search').value = '';
+            renderAccSearchResults('');
+            document.getElementById('acc-edit-title').textContent = 'Add a user';
+            $$('acc-remove').hide(true);
+            $$('acc-read').setValue(true);
+            $$('acc-write').setValue(false);
+            $$('acc-admin').setValue(false);
+            $$('acc-grant').setValue('Grant access');
+            return;
+        }
+        editPane.classList.remove('is-searching');
+        document.getElementById('acc-edit-title').textContent = 'Edit access';
+        searchField.hidden = true;
+        chosen.hidden = false;
+        perms.hidden = false;
+        actions.hidden = false;
+        const av = document.getElementById('acc-chosen-av');
+        av.style.background = ACC_AVATARS[Math.abs(Number(u.userId) || 0) % ACC_AVATARS.length];
+        av.textContent = SvnHubUI.personInitials(u.fullName || u.userName);
+        document.getElementById('acc-chosen-name').textContent = u.userName;
+        document.getElementById('acc-chosen-handle').textContent = u.fullName || '';
+        const g = grant || accGrantByUser[u.userId];
+        accEditing = !!g;
+        $$('acc-remove').hide(!accEditing);
+        $$('acc-read').setValue(g ? g.canRead === 'Y' : true);
+        $$('acc-write').setValue(g ? g.canWrite === 'Y' : false);
+        $$('acc-admin').setValue(g ? g.canAdmin === 'Y' : false);
+        $$('acc-grant').setValue(g ? 'Save changes' : 'Grant access');
+    }
+
+    function renderAccSearchResults(q) {
+        const host = document.getElementById('acc-results');
+        const query = (q || '').trim().toLowerCase();
+        if (!query) {
+            host.innerHTML = '';
+            host.hidden = true;
+            return;
+        }
+        host.hidden = false;
+        const matches = [];
+        for (const u of accUsers) {
+            if ((u.userName || '').toLowerCase().includes(query) ||
+                (u.fullName || '').toLowerCase().includes(query)) {
+                matches.push(u);
+                if (matches.length > 30)
+                    break;
+            }
+        }
+        if (!matches.length) {
+            host.innerHTML = '<p class="muted acc-results-hint">No users match "' + escapeHtml(q) + '".</p>';
+            return;
+        }
+        const shown = matches.slice(0, 30);
+        let html = shown.map((u) => {
+            const has = !!accGrantByUser[u.userId];
+            return '<button type="button" class="acc-result" data-user-id="' + u.userId + '">' +
+                accAvatar(u.userId, u.fullName || u.userName) +
+                '<span class="acc-result-names">' +
+                    '<span class="acc-result-name">' + escapeHtml(u.userName) + '</span>' +
+                    (u.fullName ? '<span class="acc-result-full muted">' + escapeHtml(u.fullName) + '</span>' : '') +
+                '</span>' +
+                (has ? '<span class="acc-chip read acc-result-has">has access</span>' : '') +
+            '</button>';
+        }).join('');
+        if (matches.length > 30)
+            html += '<p class="muted acc-results-hint">More matches found. Refine the search and press Enter again.</p>';
+        host.innerHTML = html;
+    }
+
+    function openAccessEditor(grantRow) {
+        accEditing = !!grantRow;
+        document.getElementById('acc-edit-title').textContent = accEditing ? 'Edit access' : 'Add a user';
+        $$('acc-remove').hide(!accEditing);
+        if (grantRow) {
+            setChosenUser({userId: grantRow.userId, userName: grantRow.userName, fullName: grantRow.fullName}, grantRow);
+        } else {
+            setChosenUser(null);
+        }
+        showAccPane('edit');
+        if (!grantRow)
+            setTimeout(() => document.getElementById('acc-search').focus(), 250);   // after the slide
+    }
+
+    async function openAccess() {
+        $$('acc-title').setValue('Access — ' + (repoName || repoKey));
+        document.getElementById('acc-people').innerHTML = SvnHubUI.spinner('Loading…');
+        document.getElementById('acc-count').textContent = '';
+        showAccPane('list');
+        Utils.popup_open('repo-access-popup');
+        await loadAccess();
+    }
+
+    $$('repo-access-btn').onclick(openAccess);
+    document.getElementById('acc-modal-close').addEventListener('click', () => Utils.popup_close());
+    $$('acc-close').onclick(() => Utils.popup_close());
+    document.getElementById('acc-add-btn').addEventListener('click', () => openAccessEditor(null));
+    document.getElementById('acc-back').addEventListener('click', () => showAccPane('list'));
+    document.getElementById('acc-change').addEventListener('click', () => {
+        setChosenUser(null);
+        setTimeout(() => document.getElementById('acc-search').focus(), 0);
+    });
+
+    // People list: click a row to edit, × to remove.
+    document.getElementById('acc-people').addEventListener('click', (e) => {
+        const removeBtn = e.target.closest('.acc-person-remove');
+        if (removeBtn) {
+            const uid = Number(removeBtn.getAttribute('data-remove'));
+            const row = accGrantByUser[uid];
+            if (!row)
+                return;
+            Utils.yesNo('Remove access', 'Remove ' + row.userName + '\u2019s access to this repository?', async () => {
+                const res = await Server.call(WS_ACC, 'revoke', {repoId: repoId, userId: uid});
+                if (res._Success) {
+                    Utils.toast.success('Access removed');
+                    await loadAccess();
+                }
+            });
+            return;
+        }
+        const person = e.target.closest('.acc-person');
+        if (person)
+            openAccessEditor(accGrantByUser[Number(person.getAttribute('data-user-id'))]);
+    });
+    document.getElementById('acc-people').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter')
+            return;
+        const person = e.target.closest('.acc-person');
+        if (person)
+            openAccessEditor(accGrantByUser[Number(person.getAttribute('data-user-id'))]);
+    });
+
+    // Search when the user explicitly submits the query.
+    document.getElementById('acc-search').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter')
+            return;
+        e.preventDefault();
+        renderAccSearchResults(e.target.value);
+    });
+    document.getElementById('acc-results').addEventListener('click', (e) => {
+        const btn = e.target.closest('.acc-result');
+        if (!btn)
+            return;
+        const uid = Number(btn.getAttribute('data-user-id'));
+        const u = accUsers.find((x) => Number(x.userId) === uid);
+        if (u)
+            setChosenUser(u);
+    });
+
+    $$('acc-grant').onclick(async () => {
+        if (!accChosen) {
+            Utils.showMessage('Select a user', 'Search for and choose a user first.');
+            return;
+        }
+        const res = await Server.call(WS_ACC, 'grant', {
+            repoId: repoId,
+            userId: Number(accChosen.userId),
+            canRead: $$('acc-read').getValue(),
+            canWrite: $$('acc-write').getValue(),
+            canAdmin: $$('acc-admin').getValue()
+        });
         if (res._Success) {
-            const rows = res.commits
-                .filter((c) => c.revision > 0)
-                .map((c) => ({
-                    revision: c.revision,
-                    author: c.author,
-                    dateStr: fmtDate(c.date),
-                    message: c.message
-                }));
-            commitGrid.addRecords(rows);
+            Utils.toast.success(accEditing ? 'Access updated' : 'Access granted');
+            await loadAccess();
+            showAccPane('list');
+        }
+    });
+    $$('acc-remove').onclick(() => {
+        if (!accChosen)
+            return;
+        Utils.yesNo('Remove access', 'Remove ' + accChosen.userName + '\u2019s access to this repository?', async () => {
+            const res = await Server.call(WS_ACC, 'revoke', {repoId: repoId, userId: Number(accChosen.userId)});
+            if (res._Success) {
+                Utils.toast.success('Access removed');
+                await loadAccess();
+                showAccPane('list');
+            }
+        });
+    });
+
+    // Scroll to and highlight one revision in the History feed (deep link).
+    function focusRevision(rev) {
+        const node = document.querySelector('.rev-node[data-rev="' + rev + '"]');
+        if (!node)
+            return;
+        node.classList.add('rev-focus');
+        try {
+            node.scrollIntoView({block: 'center', behavior: 'smooth'});
+        } catch (e) {
+            node.scrollIntoView();
         }
     }
 
-    async function openRevision(rev) {
-        const res = await Server.call(WS_HIST, 'revisionDetail', {repoId: repoId, revision: rev});
-        if (!res._Success)
+    // ---- About facts (branches / tags / files / size come from the stats service) ----
+    async function loadAbout() {
+        const today = (typeof DateUtils !== 'undefined') ? DateUtils.today() : 20260101;
+        const res = await Server.call(WS_STATS, 'repoFacts', {repoId: repoId, beginDay: 19900101, endDay: today});
+        if (!res._Success) {
+            // Settle the loading shimmer so the card doesn't animate forever.
+            ['fact-branches', 'fact-tags', 'fact-files', 'fact-size'].forEach((id) => setFact(id, null));
             return;
-        $$('rev-title').setValue('Revision ' + rev);
-        $$('rev-info').setHTMLValue(
-            '<b>' + escapeHtml(res.author || '') + '</b> &middot; ' + fmtDate(res.date) +
-            '<br>' + escapeHtml(res.message || ''));
-        let html;
-        if (res.diff && typeof Diff2Html !== 'undefined')
-            html = Diff2Html.html(res.diff, {drawFileList: true, matching: 'lines', outputFormat: 'line-by-line'});
-        else
-            html = '<pre>' + escapeHtml(res.diff || '(no diff)') + '</pre>';
-        $$('rev-diff').setHTMLValue(html);
-        Utils.popup_open('rev-popup');
+        }
+        setFact('fact-head', 'r' + (res.headRevision || 0));
+        setFact('fact-branches', res.branchCount == null ? '–' : res.branchCount);
+        setFact('fact-tags', res.tagCount == null ? '–' : res.tagCount);
+        setFact('fact-files', res.fileCount == null ? '–' : res.fileCount);
+        setFact('fact-size', fmtSize(res.sizeBytes));
+        if (res.createdTs)
+            setFact('fact-created', fmtDate(res.createdTs));
     }
-    $$('rev-close').onclick(() => Utils.popup_close());
-
-    // ---- init ----
-    await loadDir();
-    await loadCommits();
 
 })();
