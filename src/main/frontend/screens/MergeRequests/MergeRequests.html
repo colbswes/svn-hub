@@ -1,57 +1,237 @@
-<div>
-    <style>
-        .mr-bar { display: flex; align-items: center; gap: 12px; }
-        .mr-title { font-size: 18px; font-weight: 600; }
-        .cmt { border-top: 1px solid #eaecef; padding: 8px 0; }
-        .cmt .meta { color: #57606a; font-size: 12px; margin-bottom: 4px; }
-        .render { border: 1px solid #d0d7de; border-radius: 6px; padding: 10px; background: #fff; }
-    </style>
+<style>
+    .mr-list {
+        display: flex;
+        flex-direction: column;
+    }
+    .mr-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+        padding: 15px 6px;
+        border-top: 1px solid var(--rule);
+        cursor: pointer;
+        transition: background-color 120ms ease;
+    }
+    .mr-row:first-child {
+        border-top: 0;
+    }
+    .mr-row:hover {
+        background: rgba(68, 90, 168, 0.05);
+    }
+    .mr-status {
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        margin-top: 1px;
+    }
+    .mr-status svg {
+        display: block;
+    }
+    .mr-status.open {
+        color: var(--ok);
+    }
+    .mr-status.merged {
+        color: var(--plum);
+    }
+    .mr-status.closed {
+        color: var(--ink-4);
+    }
+    .mr-body {
+        min-width: 0;
+        flex: 1;
+    }
+    .mr-title-line {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        flex-wrap: wrap;
+    }
+    .mr-num {
+        color: var(--ink-4);
+        font-family: var(--mono);
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+    .mr-title {
+        color: var(--ink);
+        font-family: var(--display);
+        font-size: 15.5px;
+        font-weight: 700;
+    }
+    .mr-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 20px;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: capitalize;
+    }
+    .mr-pill.open {
+        color: var(--ok);
+        background: #d4e7d2;
+    }
+    .mr-pill.merged {
+        color: var(--plum);
+        background: var(--plum-soft);
+    }
+    .mr-pill.closed {
+        color: var(--ink-3);
+        background: var(--paper-3);
+    }
+    .mr-path {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 7px;
+    }
+    .mr-path .seg {
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        font-family: var(--mono);
+        font-size: 12px;
+    }
+    .mr-path .src {
+        color: var(--ink-2);
+        background: var(--paper-2);
+        border: 1px solid var(--rule);
+    }
+    .mr-path .arrow {
+        color: var(--ink-4);
+    }
+    .mr-path .tgt {
+        color: var(--teal);
+        background: var(--teal-soft);
+        border: 1px solid #a9cbc4;
+    }
+    .mr-meta {
+        margin-top: 7px;
+        color: var(--ink-3);
+        font-size: 12.5px;
+    }
+    .mr-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: none;
+        margin-top: 1px;
+    }
+    .mr-comments {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--ink-4);
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+    .mr-comments svg {
+        display: block;
+    }
+    .mr-empty {
+        margin: 0;
+    }
+</style>
+<div class="page-shell wrap-wide">
+    <div id="mr-view-list">
+        <header class="page-header">
+            <div class="page-title-block">
+                <div class="eyebrow">Merge requests</div>
+                <h1>Merge Requests - <text-label id="mr-repo"></text-label></h1>
+                <div class="lead">Review branch-to-target proposals and merge through SVNKit-backed service calls.</div>
+            </div>
+            <div class="toolbar">
+                <push-button id="mr-back">Repository</push-button>
+                <div class="root-chips ticket-status-filter" id="mr-filter" role="group" aria-label="Filter merge requests by status">
+                    <button type="button" class="root-chip active" data-status="open" aria-pressed="true">Open</button>
+                    <button type="button" class="root-chip" data-status="merged" aria-pressed="false">Merged</button>
+                    <button type="button" class="root-chip" data-status="closed" aria-pressed="false">Closed</button>
+                    <button type="button" class="root-chip" data-status="" aria-pressed="false">All</button>
+                </div>
+                <push-button id="mr-new" class="btn-accent">New Merge Request</push-button>
+            </div>
+        </header>
 
-    <div class="mr-bar">
-        <push-button id="mr-back">&larr; Repository</push-button>
-        <span class="mr-title">Merge Requests — <text-label id="mr-repo"></text-label></span>
-        <drop-down id="mr-filter" style="width: 130px;"></drop-down>
-        <push-button id="mr-new">New Merge Request</push-button>
+        <section class="card card-pad">
+            <div id="mr-list" class="mr-list"></div>
+        </section>
     </div>
 
-    <div id="mr-grid" style="width: 100%; height: calc(100vh - 260px); margin-top: 12px;"></div>
+    <div id="mr-view-detail" style="display:none;">
+        <div class="ticket-topbar">
+            <push-button id="md-back" class="btn-sm">&larr; Merge requests</push-button>
+            <div class="ticket-actions">
+                <push-button id="md-closereq">Close request</push-button>
+                <push-button id="md-merge" class="btn-accent">Approve &amp; Merge</push-button>
+            </div>
+        </div>
+        <header class="ticket-head">
+            <h1 class="ticket-title"><span class="ticket-num mono" id="md-num"></span><span id="md-title"></span></h1>
+            <div class="ticket-meta" id="md-meta"></div>
+            <div class="mr-path" id="md-path"></div>
+        </header>
+        <section class="card ticket-body-card" id="md-desc-card">
+            <div class="ticket-md" id="md-desc"></div>
+        </section>
+        <section class="ticket-diff-block">
+            <div class="ticket-thread-title">
+                <h3>Changes</h3>
+                <span class="chip chip-copper">diff preview</span>
+            </div>
+            <div class="ticket-diff" id="md-diff"></div>
+        </section>
+        <section class="ticket-thread">
+            <div class="ticket-thread-title">
+                <h3>Comments</h3>
+                <span class="chip" id="md-comment-count">0</span>
+            </div>
+            <div class="ticket-comments" id="md-comments"></div>
+            <div class="ticket-composer" id="md-composer">
+                <label class="ticket-composer-label" for="md-newcomment">Add a comment</label>
+                <textbox-input id="md-newcomment" style="width: 100%; height: 96px;"></textbox-input>
+                <div class="ticket-composer-actions">
+                    <push-button id="md-comment" class="btn-accent">Comment</push-button>
+                </div>
+            </div>
+        </section>
+    </div>
 
-    <popup id="mr-new-popup" width="600px" height="440px">
-        <popup-title>New Merge Request</popup-title>
-        <popup-body>
-            <div style="margin: 8px;">
-                <div>Source path (e.g. /branches/feature):</div>
-                <text-input id="mn-source" style="width: 460px" required></text-input>
-                <div style="margin-top: 8px;">Target path (e.g. /trunk):</div>
-                <text-input id="mn-target" style="width: 460px" required></text-input>
-                <div style="margin-top: 8px;">Title:</div>
-                <text-input id="mn-title" style="width: 460px"></text-input>
-                <div style="margin-top: 8px;">Description:</div>
-                <textbox-input id="mn-body" style="width: 460px; height: 110px;"></textbox-input>
+    <div id="mr-view-new" style="display:none;">
+        <div class="ticket-topbar">
+            <push-button id="mn-back" class="btn-sm">&larr; Merge requests</push-button>
+        </div>
+        <section class="card card-pad ticket-compose">
+            <div class="section-title" style="margin-top:0;">
+                <div>
+                    <h2>New merge request</h2>
+                    <div class="muted">Propose merging one repository path into another.</div>
+                </div>
             </div>
-            <div style="margin: 12px 8px; text-align: right;">
-                <push-button id="mn-ok">Create</push-button>
-                <push-button id="mn-cancel" style="margin-left: 10px;">Cancel</push-button>
+            <div class="ticket-compose-paths">
+                <div class="field">
+                    <label for="mn-source">Source path</label>
+                    <text-input id="mn-source" style="width: 100%;" required>/branches/feature</text-input>
+                </div>
+                <div class="field">
+                    <label for="mn-target">Target path</label>
+                    <text-input id="mn-target" style="width: 100%;" required>/trunk</text-input>
+                </div>
             </div>
-        </popup-body>
-    </popup>
-
-    <popup id="mr-detail-popup" width="1000px" height="720px">
-        <popup-title><text-label id="md-title"></text-label></popup-title>
-        <popup-body>
-            <div style="margin-bottom: 6px;"><text-label id="md-meta"></text-label></div>
-            <div class="render" style="max-height: 360px; overflow: auto;"><text-label id="md-diff"></text-label></div>
-            <div style="font-weight: 600; margin: 12px 0 4px;">Comments</div>
-            <div class="render" style="max-height: 140px; overflow: auto;"><text-label id="md-comments"></text-label></div>
-            <div style="margin-top: 8px;">
-                <textbox-input id="md-newcomment" style="width: 900px; height: 56px;"></textbox-input>
+            <div class="field" style="margin-top:12px;">
+                <label for="mn-title">Title</label>
+                <text-input id="mn-title" style="width: 100%;"></text-input>
             </div>
-            <div style="margin-top: 10px; text-align: right;">
-                <push-button id="md-comment">Comment</push-button>
-                <push-button id="md-merge" style="margin-left: 8px;">Approve &amp; Merge</push-button>
-                <push-button id="md-closereq" style="margin-left: 8px;">Close</push-button>
-                <push-button id="md-done" style="margin-left: 8px;">Done</push-button>
+            <div class="field" style="margin-top:12px;">
+                <label for="mn-body">Description (markdown)</label>
+                <textbox-input id="mn-body" style="width: 100%; height: 160px;"></textbox-input>
             </div>
-        </popup-body>
-    </popup>
+            <div class="ticket-composer-actions" style="margin-top:14px;">
+                <push-button id="mn-cancel">Cancel</push-button>
+                <push-button id="mn-ok" class="btn-accent">Create merge request</push-button>
+            </div>
+        </section>
+    </div>
 </div>

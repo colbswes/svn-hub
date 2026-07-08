@@ -1,0 +1,179 @@
+<div class="page-shell wrap-wide home">
+
+    <!-- HERO -->
+    <section class="home-hero">
+        <div class="home-hero-grid">
+            <div class="home-hero-copy">
+                <div class="eyebrow"><span class="tick">▍</span> Cloud version control · Apache Subversion</div>
+                <h1 class="home-title">Subversion hosting with <span class="home-accent">one source of truth.</span></h1>
+                <p class="lead home-lead">svn·hub is the hosted home for Subversion: one central truth, global sequential revisions everyone agrees on, and checkouts that take only the paths you need, not the whole history.</p>
+                <div class="home-cta">
+                    <push-button id="home-explore" class="btn-accent">Explore repositories</push-button>
+                    <push-button id="home-create" class="btn-quiet">Create a repository</push-button>
+                </div>
+                <div class="home-stats">
+                    <div class="home-stat"><span class="home-stat-n mono">r1 → r∞</span><span class="home-stat-l">revisions, monotonically</span></div>
+                    <div class="home-stat"><span class="home-stat-n">1</span><span class="home-stat-l">central source of truth</span></div>
+                    <div class="home-stat"><span class="home-stat-n">5</span><span class="home-stat-l">databases supported</span></div>
+                </div>
+            </div>
+
+            <div class="artifact">
+                <div class="artifact-bar">
+                    <span class="dots"><i></i><i></i><i></i></span>
+                    <span class="artifact-title mono">svn log · maya/docs-portal/trunk</span>
+                </div>
+                <div class="log-line"><span class="rn mono">128</span><span class="msg">Publish API reference refresh</span><span class="by mono">maya</span></div>
+                <div class="log-line"><span class="rn mono">127</span><span class="msg">Tag <span class="chip chip-amber">release/2.1</span> from trunk (cheap copy)</span><span class="by mono">noah</span></div>
+                <div class="log-line"><span class="rn mono">126</span><span class="msg">Branch <span class="chip chip-plum">feature/search-index</span> created at r125</span><span class="by mono">lin</span></div>
+                <div class="log-line"><span class="rn mono">125</span><span class="msg">Lock <code class="mono">docs/brand-guide.pdf</code> for exclusive edit</span><span class="by mono">sam</span></div>
+                <div class="log-line"><span class="rn mono">124</span><span class="msg">Move onboarding guide into docs/getting-started</span><span class="by mono">maya</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- DIFFERENTIATORS -->
+    <section class="home-section">
+        <div class="eyebrow"><span class="tick">▍</span> Why Subversion, why here</div>
+        <h2 class="home-h2">The model that makes large, linear, auditable work <span class="home-accent">legible.</span></h2>
+        <p class="lead home-section-lead">svn·hub leans into what SVN is genuinely good at and shows it directly, rather than hiding it behind git-shaped metaphors.</p>
+        <div class="home-features">
+            <div class="feat">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M5 7h14M5 12h14M5 17h14"/></svg></div>
+                <div><h3>Global revision numbers</h3><p>A single monotonic counter: <code class="mono">r128</code> means the exact same tree to everyone, forever. No relative refs, no "ahead by 3 of who?"</p></div>
+            </div>
+            <div class="feat">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></div>
+                <div><h3>One central source of truth</h3><p>The repository <em>is</em> the canonical state. There is no distributed ambiguity to reconcile. What is on the server is what is.</p></div>
+            </div>
+            <div class="feat">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h6l3 5h9M3 17h8l3-5"/></svg></div>
+                <div><h3>Partial, path-based checkouts</h3><p>Check out a single directory with <code class="mono">svn co ^/trunk/docs</code> and leave gigabytes of history you do not need on the server.</p></div>
+            </div>
+            <div class="feat">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h16"/><path d="M16 10l4 2-4 2" fill="currentColor" stroke="none"/></svg></div>
+                <div><h3>Atomic, ordered commits</h3><p>A commit is one transaction across many files at one revision. It either all lands or none of it does. No half states, ever.</p></div>
+            </div>
+            <div class="feat">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v8l5 3"/><circle cx="12" cy="12" r="9"/></svg></div>
+                <div><h3>First-class branches &amp; tags</h3><p>They're just directories (<code class="mono">/branches</code>, <code class="mono">/tags</code>) made by cheap server-side copy. Addressable, browsable, obvious.</p></div>
+            </div>
+            <div class="feat">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+                <div><h3>Working-copy insight</h3><p>See who has checked out and how far each copy has drifted from HEAD, including the freshness number Git-style hosting cannot show.</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMPARISON -->
+    <section class="home-section-tight">
+        <div class="eyebrow"><span class="tick">▍</span> The honest comparison</div>
+        <h2 class="home-h2 home-h2-tight">A different contract, not a worse one.</h2>
+        <div class="vs">
+            <div class="git-side">
+                <h4>Git: distributed, content-addressed</h4>
+                <ul>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg> SHA-1 hashes are opaque and non-sequential</li>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg> Clones the entire history locally</li>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg> Merge-first; conflicts are routine</li>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg> Branches/refs live in a hidden namespace</li>
+                </ul>
+            </div>
+            <div class="svn-side">
+                <h4>Subversion: centralized, path-addressed</h4>
+                <ul>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5 9-11"/></svg> Sequential <code class="mono">r1, r2, r3…</code> everyone shares</li>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5 9-11"/></svg> Check out only the paths you touch</li>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5 9-11"/></svg> Server is the single source of truth</li>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5 9-11"/></svg> Branches &amp; tags are real directories</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- SERVICE EXPLANATION -->
+    <section class="home-section home-story-section">
+        <div class="eyebrow"><span class="tick">▍</span> Why this service exists</div>
+        <div class="home-story-heading">
+            <h2 class="home-h2 home-h2-tight">Not every team needs a fork-heavy, distributed workflow.</h2>
+            <button class="home-text-link" data-nav="why" type="button">Read the service explanation</button>
+        </div>
+        <p class="lead home-section-lead">The longer explanation is simple: Git is excellent for some projects, but Subversion is still a better fit when authority, auditability, and practical visibility matter more than local history gymnastics.</p>
+
+        <div class="home-story-grid">
+            <article class="home-story-card home-story-card-wide">
+                <div>
+                    <span class="home-story-kicker mono">01</span>
+                    <h3>A better fit for many projects</h3>
+                </div>
+                <div class="home-story-copy">
+                    <p>Internal business applications, client projects, regulated systems, small teams, centrally managed repositories, and many private software projects often benefit from a single authoritative source of truth.</p>
+                    <p>With Subversion, there is one canonical repository, one official project history, and a simple sequence of globally ordered revision numbers. Users update, make changes, and commit. The repository moves forward in a clear, understandable way.</p>
+                    <p>For teams that care about audit trails, accountability, historical integrity, and straightforward reconstruction of prior system states, Subversion remains a rational choice.</p>
+                </div>
+            </article>
+
+            <article class="home-story-card">
+                <span class="home-story-kicker mono">02</span>
+                <h3>Better statistics and visibility</h3>
+                <p>A centralized repository model makes it possible to show activity by user, repository history, revision progress, checkout behavior, update behavior, working-copy freshness, and how far users are behind HEAD.</p>
+                <p>Those statistics are not decorative. They help teams spot stale work, identify coordination problems, and understand what is happening in their projects.</p>
+            </article>
+
+            <article class="home-story-card">
+                <span class="home-story-kicker mono">03</span>
+                <h3>Independent, practical, and free</h3>
+                <p>svn·hub is designed for users who want control over their development infrastructure without forcing every project into one corporate ecosystem.</p>
+                <p>Free access keeps source hosting available to individuals, small teams, students, hobbyists, businesses, and organizations without unnecessary barriers.</p>
+            </article>
+
+            <article class="home-story-card home-story-card-wide">
+                <div>
+                    <span class="home-story-kicker mono">04</span>
+                    <h3>Modern web features around a proven system</h3>
+                </div>
+                <div class="home-story-copy">
+                    <p>Subversion is mature, stable, and proven. svn·hub adds the web conveniences people expect: repository browsing, history, diffs, issue tracking, merge requests, project visibility, and useful statistics.</p>
+                    <p>The result is not nostalgia for an older tool. It is a modern application built around a version-control model that still makes sense for many real-world projects.</p>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <!-- CHECKOUT CTA -->
+    <section class="home-section-tight">
+        <div class="card card-pad home-checkout">
+            <div class="home-checkout-copy">
+                <div class="eyebrow"><span class="tick">▍</span> Get started in one command</div>
+                <h3 class="home-checkout-h">Check out, don't clone.</h3>
+                <p class="muted">No full-history download. You get exactly the working copy you asked for.</p>
+            </div>
+            <div class="home-checkout-term">
+                <div class="code" id="home-code"><span class="prompt">$</span> <span class="c-fn">svn</span> <span class="c-kw">checkout</span> <span class="c-str">svn://localhost:3691/maya/docs-portal/trunk</span> \
+        docs-portal <span class="c-kw">--depth</span> immediates
+<span class="c-cm">A    docs-portal/README.md</span>
+<span class="c-cm">A    docs-portal/guides/onboarding.md</span>
+<span class="c-cm">Checked out revision <span class="c-num">128</span>.</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="home-footer">
+        <div class="home-footer-top">
+            <div class="home-footer-brand">
+                <div class="brand"><img class="brand-mark" src="assets/svnhub-mark.svg" alt="" aria-hidden="true"><span class="wordmark">svn<span class="dot"></span>hub</span></div>
+                <p class="muted small">Hosted Subversion for teams who want one source of truth and revisions everyone agrees on.</p>
+            </div>
+            <div class="home-footer-cols">
+                <div><h5>Product</h5><ul><li><a data-nav="discover">Explore</a></li><li><a data-nav="repositories">Repositories</a></li><li><a data-nav="insights">Insights</a></li></ul></div>
+                <div><h5>Model</h5><ul><li><a data-nav="help">Revisions</a></li><li><a data-nav="help">Branches &amp; tags</a></li><li><a data-nav="help">Partial checkout</a></li><li><a data-nav="why">Why this service exists</a></li></ul></div>
+            </div>
+        </div>
+        <div class="home-footer-bottom">
+            <span>© 2026 svn·hub</span>
+            <span class="home-footer-dot">·</span>
+            <span class="mono">Hosted Subversion</span>
+        </div>
+    </footer>
+</div>

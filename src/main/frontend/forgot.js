@@ -24,7 +24,7 @@
     $$('send-code').onclick(sendCode);
     $$('email').onEnter(sendCode);
     $$('to-login').onclick(function () {
-        Utils.loadPage('login');
+        Utils.routePage('login');
     });
 
     $$('email').focus();

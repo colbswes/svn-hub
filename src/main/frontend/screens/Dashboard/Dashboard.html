@@ -1,0 +1,132 @@
+<div class="page-shell wrap-wide repo-dashboard home-overview">
+    <header class="profile-header">
+        <div class="profile-id" id="repo-prof-id">
+            <span class="profile-avatar" id="repo-prof-avatar">SV</span>
+            <div class="profile-id-text">
+                <h1>Welcome back, <text-label id="repo-prof-name"></text-label></h1>
+                <div class="profile-handle-line" id="repo-prof-handle-line"><span class="mono">@<text-label id="repo-prof-handle"></text-label></span></div>
+            </div>
+        </div>
+        <div class="profile-stats" id="repo-prof-stats"></div>
+    </header>
+
+    <div class="home-grid" id="home-grid">
+        <div class="home-col">
+            <section class="home-panel home-recent card card-pad" aria-label="Recently changed repositories">
+                <div class="home-section-head home-section-head-row">
+                    <div>
+                        <h2>Recently changed</h2>
+                        <span class="muted home-section-sub">Repositories with the latest activity</span>
+                    </div>
+                    <push-button id="home-recent-more" class="btn-quiet btn-sm">View all</push-button>
+                </div>
+                <div id="home-recent-list" class="repo-card-list"></div>
+            </section>
+
+            <section class="home-panel home-mine card card-pad" aria-label="Your repositories">
+                <div class="home-section-head home-section-head-row">
+                    <div>
+                        <h2>Your repositories</h2>
+                        <span class="muted home-section-sub">Repositories you own</span>
+                    </div>
+                    <div class="home-mine-actions">
+                        <push-button id="home-new" class="btn-accent btn-sm">New Repository</push-button>
+                        <push-button id="home-mine-more" class="btn-quiet btn-sm">View all</push-button>
+                    </div>
+                </div>
+                <div id="repo-card-list" class="repo-card-list"></div>
+            </section>
+        </div>
+
+        <div class="home-col">
+            <section class="home-panel home-attention card card-pad" aria-label="Needs attention">
+                <div class="home-section-head">
+                    <h2>Needs attention</h2>
+                    <span class="muted home-section-sub">Open issues and merge requests on repositories you own</span>
+                </div>
+                <div id="home-attention-summary" class="home-attn-summary muted"></div>
+                <div id="home-attention-list" class="home-attn-list"></div>
+            </section>
+
+            <section class="home-panel home-activity card card-pad" aria-label="Recent activity">
+                <div class="home-section-head">
+                    <h2>Recent activity</h2>
+                    <span class="muted home-section-sub">Latest commits across repositories you can see</span>
+                </div>
+                <div id="home-activity-list" class="home-activity-list"></div>
+            </section>
+
+            <section class="home-panel home-wc card card-pad" aria-label="Working copies">
+                <div class="home-section-head">
+                    <h2>Working copies</h2>
+                    <span class="muted home-section-sub">Checkout freshness across repositories you own</span>
+                </div>
+                <div id="home-wc-summary" class="home-wc-summary"></div>
+                <div id="home-wc-list" class="home-wc-list"></div>
+            </section>
+
+            <section class="home-panel home-insights card card-pad" aria-label="Commit activity">
+                <div class="home-section-head home-section-head-row">
+                    <div>
+                        <h2>Commit activity</h2>
+                        <span class="muted home-section-sub">Commits per day across your repositories, last 30 days</span>
+                    </div>
+                    <push-button id="home-insights-more" class="btn-quiet btn-sm">Full insights →</push-button>
+                </div>
+                <div id="home-insights-chart" class="home-ins-chart"></div>
+            </section>
+        </div>
+    </div>
+
+    <section id="home-getstarted" class="card card-pad home-checkout home-getstarted" style="display:none;" aria-label="Get started">
+        <div class="home-checkout-copy">
+            <h2 class="home-checkout-h">Get started with svn·hub</h2>
+            <p class="muted">Create your first repository, then check out a working copy. Activity, checkout stats, and working-copy freshness appear here as soon as people start using it.</p>
+            <div class="home-getstarted-actions">
+                <push-button id="gs-new" class="btn-accent">New Repository</push-button>
+            </div>
+        </div>
+        <div class="home-checkout-term">
+            <div class="code"><span class="prompt">$</span> <span class="c-fn">svn</span> <span class="c-kw">checkout</span> <span class="c-str">svn://your-server/<span id="gs-handle">you</span>/my-project/trunk</span> my-project
+<span class="c-cm">Checked out revision <span class="c-num">1</span>.</span></div>
+        </div>
+    </section>
+
+    <popup id="repo-form-popup" width="520px" height="560px">
+        <popup-title>New repository</popup-title>
+        <popup-body>
+            <div class="modal-pad">
+                <div class="field">
+                    <label for="rf-name">Repository name <span class="req">*</span></label>
+                    <text-input id="rf-name" style="width: 100%" required></text-input>
+                    <div class="field-error" id="rf-name-err"></div>
+                    <div class="muted" style="font-size:12px;">Letters, digits, dash or underscore. No spaces.</div>
+                </div>
+                <div class="field" style="margin-top:16px;">
+                    <label for="rf-desc">Description</label>
+                    <text-input id="rf-desc" style="width: 100%"></text-input>
+                </div>
+                <div class="field" style="margin-top:16px;">
+                    <label>Visibility</label>
+                    <div class="vis-options">
+                        <label class="vis-opt" for="rf-vis-private">
+                            <radio-button group="rf-vis" id="rf-vis-private" value="private">Private</radio-button>
+                            <span class="vis-opt-desc">Only people you grant access can browse or check out.</span>
+                        </label>
+                        <label class="vis-opt" for="rf-vis-public">
+                            <radio-button group="rf-vis" id="rf-vis-public" value="public">Public checkout</radio-button>
+                            <span class="vis-opt-desc">Anyone on this server can browse and check out the repository.</span>
+                        </label>
+                    </div>
+                </div>
+                <div style="margin-top:16px;">
+                    <check-box id="rf-layout">Create standard layout (trunk, branches, tags)</check-box>
+                </div>
+                <div class="modal-actions">
+                    <push-button id="rf-cancel">Cancel</push-button>
+                    <push-button id="rf-submit" class="btn-accent">Create</push-button>
+                </div>
+            </div>
+        </popup-body>
+    </popup>
+</div>

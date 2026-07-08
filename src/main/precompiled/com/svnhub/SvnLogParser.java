@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
 public final class SvnLogParser {
 
     private static final Pattern REV = Pattern.compile("^r(\\d+)$");
+    private static final Pattern PEG_REV = Pattern.compile("^(.+)@(\\d+)$");
 
     private SvnLogParser() {
     }
@@ -93,12 +94,24 @@ public final class SvnLogParser {
                 }
             }
             if (e.path == null && t.startsWith("/")) {
-                // strip a peg revision suffix like /@1
-                int at = t.indexOf('@');
-                e.path = at >= 0 ? t.substring(0, at) : t;
-                if (e.path.isEmpty())
-                    e.path = "/";
+                java.util.regex.Matcher peg = PEG_REV.matcher(t);
+                if (peg.matches()) {
+                    t = peg.group(1);
+                    if (e.revision == null)
+                        e.revision = Integer.parseInt(peg.group(2));
+                }
+                e.path = t.isEmpty() ? "/" : t;
                 continue;
+            }
+            if (e.revision == null && t.startsWith("/")) {
+                java.util.regex.Matcher peg = PEG_REV.matcher(t);
+                if (peg.matches()) {
+                    e.revision = Integer.parseInt(peg.group(2));
+                    if (extra.length() > 0)
+                        extra.append(' ');
+                    extra.append(peg.group(1));
+                    continue;
+                }
             }
             if (extra.length() > 0)
                 extra.append(' ');

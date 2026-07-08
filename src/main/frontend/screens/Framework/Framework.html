@@ -1,102 +1,91 @@
-<div>
+<div class="svnhub-app">
+    <header class="app-nav">
+        <div class="wrap-wide app-nav-inner">
+            <div class="brand" id="brand-home" role="button" tabindex="0" aria-label="svn·hub home">
+                <img class="brand-mark" src="assets/svnhub-mark.svg" alt="" aria-hidden="true">
+                <span class="wordmark">svn<span class="dot"></span>hub</span>
+            </div>
 
-    <style>
-        .svnhub-topbar {
-            background: #24292f;
-            color: #fff;
-            padding: 10px 18px;
-            font-size: 22px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .svnhub-topbar .tag {
-            font-size: 13px;
-            font-weight: 400;
-            color: #b8c0c8;
-            margin-left: 14px;
-        }
-        .svnhub-account {
-            font-size: 13px;
-            font-weight: 400;
-            white-space: nowrap;
-        }
-        .svnhub-account #acct-name {
-            color: #b8c0c8;
-            margin-right: 12px;
-        }
-        .svnhub-body {
-            display: flex;
-            margin-top: 14px;
-        }
-        .svnhub-menu {
-            width: 160px;
-            flex: 0 0 160px;
-            margin: 0 24px 0 14px;
-        }
-        .button-left {
-            width: 150px;
-            margin-bottom: 10px;
-        }
-        .svnhub-content {
-            flex: 1 1 auto;
-            min-width: 600px;
-            padding-right: 18px;
-        }
-    </style>
+            <nav class="nav-links" id="primary-nav" aria-label="Primary">
+                <span class="nav-pill nav-pill-active" aria-hidden="true"></span>
+                <push-button id="repositories">Home</push-button>
+                <push-button id="discover">Explore</push-button>
+                <push-button id="insights">Insights</push-button>
+                <push-button id="users" style="display:none;">Admin</push-button>
+            </nav>
 
-    <div class="svnhub-topbar">
-        <span>Svn-Hub <span class="tag">Public Subversion hosting, with real checkout/update insight</span></span>
-        <span class="svnhub-account">
-            <text-label id="acct-name"></text-label>
-            <push-button id="change-pw">Change password</push-button>
-        </span>
-    </div>
+            <div class="nav-search" id="nav-search">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                <input type="text" id="nav-q" class="nav-search-input" placeholder="Jump to repository or person..." autocomplete="off">
+                <button type="button" id="nav-q-clear" class="search-clear-icon" aria-label="Clear search" title="Clear search">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                </button>
+                <div class="nav-search-results" id="nav-results"></div>
+            </div>
 
-    <div class="svnhub-body">
-        <div class="svnhub-menu">
-            <push-button class="button-left" id="repositories">Repositories</push-button>
-            <br>
-            <push-button class="button-left" id="discover">Discover</push-button>
-            <br>
-            <push-button class="button-left" id="insights">Insights</push-button>
-            <br>
-            <push-button class="button-left" id="users">Users</push-button>
-            <br>
-            <push-button class="button-left" id="help">Help</push-button>
-            <br>
-            <push-button class="button-left" id="logout">Logout</push-button>
+            <div class="account-box">
+                <push-button id="help" class="nav-help">Help</push-button>
+                <div class="acct-menu" id="acct-menu">
+                    <button type="button" class="acct-chip" id="acct-chip" aria-label="Your account" aria-haspopup="true" aria-expanded="false">
+                        <span class="avatar" id="acct-avatar">SV</span>
+                        <span class="mono acct-chip-handle">@<text-label id="acct-name"></text-label></span>
+                        <svg class="acct-caret" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <div class="acct-dropdown" id="acct-dropdown" role="menu">
+                        <button type="button" class="acct-menu-item" id="menu-view-profile" role="menuitem">View my profile</button>
+                        <button type="button" class="acct-menu-item" id="menu-change-pw" role="menuitem">Change password</button>
+                        <button type="button" class="acct-menu-item danger" id="menu-logout" role="menuitem">Logout</button>
+                    </div>
+                </div>
+                <push-button id="signin" class="btn-accent btn-sm">Sign in</push-button>
+            </div>
         </div>
+    </header>
 
-        <div class="svnhub-content" id="app-screen-area">
-            Select an item on the left.
-        </div>
-    </div>
+    <main id="app-screen-area">
+    </main>
 
-    <popup id="change-pw-popup" height="300px" width="430px">
-        <popup-title>Change Password</popup-title>
+    <popup id="edit-profile-popup" width="440px" height="300px">
+        <popup-title>Edit profile</popup-title>
         <popup-body>
-            <div style="padding: 8px 4px;">
-                <div style="margin-bottom:12px;">
-                    <div style="display:inline-block; width:150px; text-align:right; margin-right:10px;">Current password:</div>
-                    <text-input id="cpw-current" password required></text-input>
+            <div class="modal-pad">
+                <div class="field">
+                    <label for="ep-name">Display name</label>
+                    <text-input id="ep-name" maxlength="200" style="width: 360px"></text-input>
                 </div>
-                <div style="margin-bottom:12px;">
-                    <div style="display:inline-block; width:150px; text-align:right; margin-right:10px;">New password:</div>
-                    <text-input id="cpw-new" password required></text-input>
-                </div>
-                <div style="margin-bottom:12px;">
-                    <div style="display:inline-block; width:150px; text-align:right; margin-right:10px;">Confirm:</div>
-                    <text-input id="cpw-confirm" password required></text-input>
-                </div>
-                <div style="text-align:center; margin-top:18px;">
-                    <push-button id="cpw-ok">OK</push-button>
-                    <push-button id="cpw-cancel" style="margin-left:10px;">Cancel</push-button>
+                <div class="field-error" id="ep-err"></div>
+                <p class="muted" style="margin-top:12px; font-size:12.5px;">Shown on your profile and next to your commits. Your @handle and email can only be changed by an administrator.</p>
+                <div class="modal-actions">
+                    <push-button id="ep-cancel">Cancel</push-button>
+                    <push-button id="ep-ok" class="btn-accent">Save</push-button>
                 </div>
             </div>
         </popup-body>
     </popup>
 
+    <popup id="change-pw-popup" width="440px" height="380px">
+        <popup-title>Change password</popup-title>
+        <popup-body>
+            <div class="modal-pad">
+                <div class="field">
+                    <label for="cpw-cur">Current password</label>
+                    <text-input id="cpw-cur" password required style="width: 360px"></text-input>
+                </div>
+                <div class="field" style="margin-top:14px;">
+                    <label for="cpw-new">New password</label>
+                    <text-input id="cpw-new" password required style="width: 360px"></text-input>
+                </div>
+                <div class="field" style="margin-top:14px;">
+                    <label for="cpw-confirm">Confirm new password</label>
+                    <text-input id="cpw-confirm" password required style="width: 360px"></text-input>
+                </div>
+                <div class="field-error" id="cpw-err"></div>
+                <p class="muted" style="margin-top:12px; font-size:12.5px;">Updates both your web sign-in and your Subversion password. You'll be signed out to sign in again.</p>
+                <div class="modal-actions">
+                    <push-button id="cpw-cancel">Cancel</push-button>
+                    <push-button id="cpw-ok" class="btn-accent">Update password</push-button>
+                </div>
+            </div>
+        </popup-body>
+    </popup>
 </div>

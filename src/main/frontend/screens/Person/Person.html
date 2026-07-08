@@ -1,0 +1,116 @@
+<div class="page-shell wrap-wide person-page">
+    <div class="person-topbar">
+        <push-button id="person-back" class="repo-back btn-sm">&larr; Back</push-button>
+    </div>
+
+    <div id="person-error" class="card card-pad person-error" hidden>
+        <h2 id="person-error-title">Couldn't load profile</h2>
+        <p class="muted" id="person-error-body">This person could not be found, or the profile failed to load.</p>
+    </div>
+
+    <div id="person-body" class="person-body" hidden>
+        <header class="profile-header person-profile-header">
+            <div class="profile-id">
+                <span class="profile-avatar" id="person-avatar">?</span>
+                <div class="profile-id-text">
+                    <div class="person-name-row">
+                        <h1 id="person-name">Person</h1>
+                        <button type="button" id="person-name-edit" class="person-name-edit" hidden aria-label="Edit name" title="Edit name">
+                            <span class="person-name-edit-icons" aria-hidden="true">
+                                <svg class="person-name-edit-icon person-name-edit-pencil" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5l2.35-.48 7.08-7.08a1.35 1.35 0 0 0 0-1.91l-.46-.46a1.35 1.35 0 0 0-1.91 0L2.98 9.65 2.5 12a.42.42 0 0 0 .5.5Z"/><path d="m9.25 3.38 3.37 3.37"/></svg>
+                                <svg class="person-name-edit-icon person-name-edit-x" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4.5 4.5 7 7"/><path d="m11.5 4.5-7 7"/></svg>
+                            </span>
+                        </button>
+                        <button type="button" id="person-name-save" class="person-name-save" hidden aria-label="Save name" title="Save name">
+                            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3.25 8.35 3.1 3.15 6.4-7"/></svg>
+                        </button>
+                    </div>
+                    <div class="profile-handle-line">
+                        <button type="button" class="handle-copy mono" id="person-handle-copy" aria-label="Copy handle">@<text-label id="person-handle"></text-label></button>
+                    </div>
+                    <div class="muted profile-since" id="person-since"></div>
+                    <div class="person-header-actions">
+                        <button type="button" class="btn-sm btn-ghost person-copy-url" id="person-copy-url" hidden>
+                            <span id="person-copy-url-text">Copy SVN URL</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="profile-header-right">
+                <div class="profile-stats" id="person-stats"></div>
+                <div class="spark-wrap" id="person-spark-wrap" hidden>
+                    <div class="eyebrow">Last 26 weeks</div>
+                    <div id="person-spark"></div>
+                </div>
+            </div>
+        </header>
+
+        <div class="person-detail-layout">
+            <aside class="side-rail person-rail">
+                <section class="card card-pad">
+                    <div class="eyebrow">Profile</div>
+                    <dl class="fact-list person-facts">
+                        <div class="fact"><dt>Last commit</dt><dd id="person-fact-last">–</dd></div>
+                    </dl>
+                </section>
+                <section class="card card-pad" id="person-top-repos-card">
+                    <div class="eyebrow">Most active in</div>
+                    <div id="person-top-repos" class="person-top-repos"></div>
+                </section>
+            </aside>
+
+            <main class="person-main">
+                <section class="card card-pad ins-section person-expand-section" data-section="repositories">
+                    <button type="button" class="ins-section-head person-expand-head" aria-expanded="true" aria-controls="person-repositories-body">
+                        <span class="ins-section-caret" aria-hidden="true"></span>
+                        <span class="person-expand-copy">
+                            <span class="ins-section-title">Repositories</span>
+                            <span class="ins-section-note" id="person-repo-subtitle">Visible repositories owned by this person.</span>
+                        </span>
+                        <span class="person-expand-meta">
+                            <span class="chip chip-copper"><text-label id="person-repo-count"></text-label></span>
+                        </span>
+                        <span class="ins-section-line" aria-hidden="true"></span>
+                    </button>
+                    <div id="person-repositories-body" class="ins-section-body person-expand-body">
+                        <div class="person-repo-toolbar" id="person-repo-toolbar" hidden>
+                            <div class="person-repo-search">
+                                <input type="text" id="person-repo-filter" placeholder="Filter repositories by name or description" aria-label="Filter repositories">
+                            </div>
+                            <label class="person-repo-sort">
+                                <span class="muted">Sort</span>
+                                <select id="person-repo-sort" aria-label="Sort repositories">
+                                    <option value="name">Name</option>
+                                    <option value="updated">Recently updated</option>
+                                    <option value="revisions">Most revisions</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="person-repos" class="repo-card-list"></div>
+                        <div class="person-repo-more" id="person-repo-more" hidden>
+                            <span class="muted" id="person-repo-more-text"></span>
+                            <push-button id="person-repo-load-more" class="btn-sm" hidden>Load more</push-button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card card-pad ins-section person-expand-section person-activity-card" data-section="recent-commits">
+                    <button type="button" class="ins-section-head person-expand-head" aria-expanded="true" aria-controls="person-activity-body">
+                        <span class="ins-section-caret" aria-hidden="true"></span>
+                        <span class="person-expand-copy">
+                            <span class="ins-section-title">Recent commits</span>
+                            <span class="ins-section-note">Commit activity in repositories you can see.</span>
+                        </span>
+                        <span class="person-expand-meta">
+                            <span class="chip chip-copper"><text-label id="person-activity-count"></text-label></span>
+                        </span>
+                        <span class="ins-section-line" aria-hidden="true"></span>
+                    </button>
+                    <div id="person-activity-body" class="ins-section-body person-expand-body">
+                        <div id="person-activity" class="revision-spine person-activity-list"></div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+</div>

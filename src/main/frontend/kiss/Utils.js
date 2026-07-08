@@ -1356,12 +1356,15 @@ class Utils {
      */
     static loadPage(page, tag, initialFocus, argv, retv) {
         return new Promise(function (resolve, reject) {
-            Utils.cleanup();
-            Utils.lastScreenLoaded.page = page;
-            Utils.lastScreenLoaded.tag  = tag;
-            Utils.lastScreenLoaded.initialFocus = initialFocus;
-            Utils.lastScreenLoaded.argv  = argv;
-            Utils.lastScreenLoaded.retv = retv;
+            const fullScreenLoad = !tag || tag === 'app-screen-area' || tag === 'body';
+            if (fullScreenLoad) {
+                Utils.cleanup();
+                Utils.lastScreenLoaded.page = page;
+                Utils.lastScreenLoaded.tag  = tag;
+                Utils.lastScreenLoaded.initialFocus = initialFocus;
+                Utils.lastScreenLoaded.argv  = argv;
+                Utils.lastScreenLoaded.retv = retv;
+            }
             Utils.getHTML(page + '.html').then(function (text) {
                 if (tag) {
                     const element = DOMUtils.getElement(tag);
@@ -1389,6 +1392,131 @@ class Utils {
                 console.log("loadPage: error loading " + page);
                 reject();
             });
+        });
+    }
+
+    /**
+     * Loads a page and records it in browser history so the Back button restores
+     * the previous KISS screen.  This intentionally wraps loadPage instead of
+     * replacing it so older KISS code can still opt out of browser history.
+     *
+     * @param {string} page path to the page to be loaded
+     * @param {string} tag optional ID of div to fill (if empty, "body" tag is used)
+     * @param {string} initialFocus optional, ID of control to set initial focus on
+     * @param {object} argv arguments for the page being loaded
+     * @param {object} options {replace: boolean}
+     */
+    static routePage(page, tag, initialFocus, argv, options = {}) {
+        Utils.ensureRouteHandler();
+        const route = Utils.buildRouteState(page, tag, initialFocus, argv);
+        const url = Utils.routeUrl(route);
+        if (options.replace)
+            history.replaceState(route, document.title, url);
+        else
+            history.pushState(route, document.title, url);
+        return Utils.loadRouteState(route);
+    }
+
+    /**
+     * Route to a page while replacing the current browser history entry.
+     *
+     * @see Utils.routePage
+     */
+    static replacePage(page, tag, initialFocus, argv) {
+        return Utils.routePage(page, tag, initialFocus, argv, {replace: true});
+    }
+
+    static buildRouteState(page, tag, initialFocus, argv) {
+        return {
+            __kissRoute: true,
+            page: page,
+            tag: tag,
+            initialFocus: initialFocus,
+            argv: argv,
+            data: Utils.cloneRouteData()
+        };
+    }
+
+    static loadRouteState(route) {
+        if (route && route.data)
+            Utils.globalData = Object.assign({}, Utils.globalData, route.data);
+        Utils.isHandlingPopState = true;
+        return Utils.loadPage(route.page, route.tag, route.initialFocus, route.argv).finally(function () {
+            Utils.isHandlingPopState = false;
+        });
+    }
+
+    static routeUrl(routeOrPage) {
+        const page = typeof routeOrPage === 'object' ? routeOrPage.page : routeOrPage;
+        const data = typeof routeOrPage === 'object' ? (routeOrPage.data || {}) : (Utils.globalData || {});
+        const repoScoped = page === 'screens/Repository/Repository' ||
+            page === 'screens/Issues/Issues' ||
+            page === 'screens/MergeRequests/MergeRequests';
+        const personScoped = page === 'screens/Person/Person';
+        const discoverScoped = page === 'screens/Discover/Discover';
+        const url = new URL(location.href);
+        url.hash = page ? encodeURIComponent(page) : '';
+        // Repo detail sub-routes are transient; start clean, then re-add only
+        // explicit restore/deep-link data carried by the route.
+        ['section', 'path', 'file', 'view', 'issue', 'mr', 'rev'].forEach((key) => url.searchParams.delete(key));
+        if (discoverScoped && data.discoverQuery)
+            url.searchParams.set('q', data.discoverQuery);
+        else
+            url.searchParams.delete('q');
+        if (repoScoped && data.repoId) {
+            url.searchParams.set('repoId', data.repoId);
+            if (data.repoKey)
+                url.searchParams.set('repoKey', data.repoKey);
+            else
+                url.searchParams.delete('repoKey');
+            if (data.repoName)
+                url.searchParams.set('repoName', data.repoName);
+            else
+                url.searchParams.delete('repoName');
+            if (data.repoSection === 'files' && data.repoPath) {
+                url.searchParams.set('section', 'files');
+                url.searchParams.set('path', data.repoPath);
+                if (data.repoFile === true)
+                    url.searchParams.set('file', '1');
+            } else if (['history', 'issues', 'mrs', 'insights', 'readme'].includes(data.repoSection)) {
+                url.searchParams.set('section', data.repoSection);
+                const revision = Number(data.repoRevision);
+                if (data.repoSection === 'history' && Number.isFinite(revision) && revision > 0)
+                    url.searchParams.set('rev', revision);
+                if (data.repoSection === 'issues' && (data.repoIssue === 'new' || /^\d+$/.test(String(data.repoIssue || ''))))
+                    url.searchParams.set('issue', data.repoIssue);
+                if (data.repoSection === 'mrs' && (data.repoMergeRequest === 'new' || /^\d+$/.test(String(data.repoMergeRequest || ''))))
+                    url.searchParams.set('mr', data.repoMergeRequest);
+            }
+        } else {
+            url.searchParams.delete('repoId');
+            url.searchParams.delete('repoKey');
+            url.searchParams.delete('repoName');
+        }
+        if (personScoped && data.personHandle)
+            url.searchParams.set('personHandle', data.personHandle);
+        else
+            url.searchParams.delete('personHandle');
+        return url.pathname + url.search + url.hash;
+    }
+
+    static cloneRouteData() {
+        try {
+            return JSON.parse(JSON.stringify(Utils.globalData || {}));
+        } catch (e) {
+            return {};
+        }
+    }
+
+    static ensureRouteHandler() {
+        if (Utils.routeHandlerInstalled)
+            return;
+        Utils.routeHandlerInstalled = true;
+        window.addEventListener('popstate', function (e) {
+            const route = e.state;
+            if (!route || route.__kissRoute !== true || !route.page)
+                return;
+            Utils.loadRouteState(route);
         });
     }
 
@@ -2471,6 +2599,8 @@ Utils.enterFunctionStack = [];      //  Save stack for enter key to handle popup
 
 Utils.screenStack = [];
 Utils.lastScreenLoaded = {};  //  current stackframe
+Utils.routeHandlerInstalled = false;
+Utils.isHandlingPopState = false;
 
 // This is used to prevent button clicks when there is an active web service call
 Utils.suspendDepth = 0;  // when > 0 suspend buttons

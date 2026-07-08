@@ -50,24 +50,19 @@
             Utils.saveData('emailVerified', login.emailVerified === true);
             // New accounts are unverified: send them to verify their email first.
             if (login.emailVerified === true) {
-                DOMUtils.preventNavigation(true, function () {
-                    Utils.yesNo('Confirm', 'Are you sure you want to logout?', function () {
-                        Server.logout();
-                    });
-                });
-                Utils.loadPage('screens/Framework/Framework');
+                Utils.replacePage('screens/Framework/Framework');
             } else {
-                Utils.loadPage('verify');
+                Utils.replacePage('verify');
             }
         } else {
-            Utils.loadPage('login');
+            Utils.replacePage('login');
         }
     }
 
     $$('register').onclick(doRegister);
     $$('password2').onEnter(doRegister);
     $$('to-login').onclick(function () {
-        Utils.loadPage('login');
+        Utils.routePage('login');
     });
     $$('email').focus();
 

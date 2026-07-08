@@ -8,8 +8,10 @@
     const screenArea = 'app-screen-area';
 
     $$('as-back').onclick(function () {
-        Utils.cleanup();
-        Utils.loadPage('screens/Help/Help', screenArea);
+        Utils.routePage('screens/Help/Help', screenArea);
     });
+
+    if (Utils.setAppNavActive)
+        Utils.setAppNavActive('help');
 
 })();

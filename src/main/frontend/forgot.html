@@ -1,27 +1,41 @@
-<div class="center">
-    <div style="display: inline-block; text-align: center; max-width: 500px;">
-        <h1>Svn-Hub</h1>
-        <div style="margin-bottom: 14px; color: #57606a;">Forgot your password?</div>
-
-        <p style="color:#24292f; line-height:1.55; margin: 0 0 16px;">
-            Enter your email address and we'll send you a 6-digit code. For the next
-            30 minutes you can sign in with that code in place of your password &mdash;
-            then set a new one. Your existing password keeps working the whole time.
-        </p>
-
-        <form onsubmit="return false;" autocomplete="off">
-            <div style="display:inline-block; width:80px; text-align:right; margin-right:10px;">Email:</div>
-            <text-input id="email" required maxlength="255" autocomplete="username"></text-input>
-            <br>
-            <push-button id="send-code" style="margin-top:20px;">Send code</push-button>
-        </form>
-
-        <div style="min-height:22px; margin:16px 0; color:#1a7f37; font-size:14px;">
-            <text-label id="sent-msg"></text-label>
+<div class="auth-shell">
+    <aside class="auth-panel">
+        <div class="brand">
+            <img class="brand-mark" src="assets/svnhub-mark.svg" alt="" aria-hidden="true">
+            <span class="wordmark">svn<span class="dot"></span>hub</span>
         </div>
 
-        <div style="margin-top:8px;">
-            <push-button id="to-login">Back to sign in</push-button>
+        <div class="auth-copy">
+            <div class="eyebrow">Reset access</div>
+            <h1>A code gets you back in without replacing your password.</h1>
+            <p>For the next 30 minutes, the emailed code works as a temporary sign-in credential. Your existing password keeps working the whole time.</p>
         </div>
-    </div>
+    </aside>
+
+    <main class="auth-form-wrap">
+        <section class="auth-card">
+            <div class="eyebrow">Forgot password</div>
+            <h1>Send a reset code</h1>
+            <p class="muted" style="margin:8px 0 0;">Enter your email address and check your inbox for a 6-digit code.</p>
+
+            <form class="auth-form" onsubmit="return false;" autocomplete="off">
+                <div class="field">
+                    <label for="email">Email</label>
+                    <text-input id="email" required maxlength="255" autocomplete="username"></text-input>
+                </div>
+
+                <div class="auth-actions">
+                    <push-button id="send-code" class="btn-accent">Send code</push-button>
+                </div>
+            </form>
+
+            <div style="min-height:22px; margin-top:16px; color:var(--ok); font-size:13px;">
+                <text-label id="sent-msg"></text-label>
+            </div>
+
+            <div class="auth-foot">
+                <push-button id="to-login" class="btn-sm btn-quiet">Back to sign in</push-button>
+            </div>
+        </section>
+    </main>
 </div>

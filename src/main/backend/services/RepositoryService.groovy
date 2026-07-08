@@ -71,6 +71,129 @@ class RepositoryService {
         outjson.put("rows", rows)
     }
 
+    /**
+     * Recently changed repositories visible to the caller (owned, public, or
+     * granted read), ordered by most recent HEAD revision (or creation) first.
+     * Backs the "Welcome back" home overview's Recently changed container.
+     */
+    void getRecentRepositories(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
+        Integer userId = currentUser(servlet)
+        boolean admin = RepoAccess.isAdmin(db, userId)
+        int limit = injson.getInt("limit", 6)
+        if (limit < 1)
+            limit = 6
+        if (limit > 24)
+            limit = 24
+        List<Record> recs
+        if (admin)
+            recs = db.fetchAll("""select * from repository where is_active = 'Y'
+                    order by coalesce(head_revision_ts, created_ts) desc""")
+        else
+            recs = db.fetchAll("""select r.* from repository r
+                    where r.is_active = 'Y'
+                    and ( r.owner_id = ?
+                          or r.visibility = 'public'
+                          or exists (select 1 from repository_access ra
+                                     where ra.repo_id = r.repo_id and ra.user_id = ? and ra.can_read = 'Y') )
+                    order by coalesce(r.head_revision_ts, r.created_ts) desc""", userId, userId)
+        String base = baseUrl()
+        JSONArray rows = new JSONArray()
+        int n = Math.min(limit, recs.size())
+        for (int i = 0; i < n; i++)
+            rows.put(repoRow(recs[i], userId, base))
+        outjson.put("rows", rows)
+    }
+
+    /**
+     * Recent commit activity across repositories the caller can see (owned,
+     * public, or granted read; all for admins). Backs the home overview's
+     * "Recent activity" feed. Returns the most recent cached revisions.
+     */
+    void getRecentActivity(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
+        Integer userId = currentUser(servlet)
+        boolean admin = RepoAccess.isAdmin(db, userId)
+        int limit = injson.getInt("limit", 10)
+        if (limit < 1)
+            limit = 10
+        if (limit > 50)
+            limit = 50
+        String visWhere
+        List params = []
+        if (admin) {
+            visWhere = "r.is_active = 'Y'"
+        } else {
+            visWhere = """r.is_active = 'Y' and (
+                    r.owner_id = ?
+                    or r.visibility = 'public'
+                    or exists (select 1 from repository_access ra
+                               where ra.repo_id = r.repo_id and ra.user_id = ? and ra.can_read = 'Y'))"""
+            params = [userId, userId]
+        }
+        String sql = """select c.revision as "revision",
+                c.repo_id as "repoId",
+                r.name as "repoName",
+                r.repo_key as "repoKey",
+                r.visibility as "visibility",
+                r.owner_id as "ownerId",
+                c.author as "author",
+                c.commit_ts as "commitTs",
+                c.message as "message",
+                c.changed_count as "changedCount"
+                from commit_cache c
+                join repository r on r.repo_id = c.repo_id
+                where """ + visWhere + """
+                order by c.commit_ts desc nulls last"""
+        JSONArray rows = db.fetchAllJSON(limit, sql, *params)
+        outjson.put("rows", rows)
+    }
+
+    /**
+     * Open issues and merge requests across every repository the caller OWNS:
+     * headline counts plus the most recently filed open items.  Backs the home
+     * overview's "Needs attention" panel.
+     */
+    void getAttentionItems(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
+        Integer userId = currentUser(servlet)
+        if (userId == null)
+            throw new UserException("Not signed in.")
+        int limit = injson.getInt("limit", 5)
+        if (limit < 1)
+            limit = 5
+        if (limit > 20)
+            limit = 20
+        Record counts = db.fetchOne("""select
+                (select count(*) from issue i join repository r on r.repo_id = i.repo_id
+                  where r.owner_id = ? and r.is_active = 'Y' and i.status = 'open') as open_issues,
+                (select count(*) from merge_request m join repository r on r.repo_id = m.repo_id
+                  where r.owner_id = ? and r.is_active = 'Y' and m.status = 'open') as open_mrs""", userId, userId)
+        outjson.put("openIssues", counts.getLong("open_issues") ?: 0L)
+        outjson.put("openMergeRequests", counts.getLong("open_mrs") ?: 0L)
+        List<Record> recs = db.fetchAll(limit, """select t.* from (
+                select 'issue' as item_type, i.number as number, i.title as title, i.created_ts as created_ts,
+                       r.repo_id as repo_id, r.repo_key as repo_key, r.name as name
+                from issue i join repository r on r.repo_id = i.repo_id
+                where r.owner_id = ? and r.is_active = 'Y' and i.status = 'open'
+                union all
+                select 'mr' as item_type, m.number, m.title, m.created_ts,
+                       r.repo_id, r.repo_key, r.name
+                from merge_request m join repository r on r.repo_id = m.repo_id
+                where r.owner_id = ? and r.is_active = 'Y' and m.status = 'open'
+                ) t order by t.created_ts desc""", userId, userId)
+        JSONArray rows = new JSONArray()
+        for (Record r : recs) {
+            JSONObject o = new JSONObject()
+            o.put("type", r.getString("item_type"))
+            o.put("number", r.getInt("number"))
+            o.put("title", r.getString("title"))
+            o.put("createdTs", r.getLong("created_ts"))
+            o.put("repoId", r.getInt("repo_id"))
+            o.put("repoKey", r.getString("repo_key"))
+            o.put("repoName", r.getString("name"))
+            rows.put(o)
+        }
+        outjson.put("rows", rows)
+    }
+
     /** A single repository plus the caller's access level. */
     void getRepository(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
@@ -79,7 +202,9 @@ class RepositoryService {
         Record r = db.fetchOne("select * from repository where repo_id = ?", repoId)
         if (r == null)
             throw new UserException("Repository not found.")
-        outjson.put("repo", repoRow(r, userId, baseUrl()))
+        JSONObject repo = repoRow(r, userId, baseUrl())
+        addCounts(repo, db, repoId)
+        outjson.put("repo", repo)
         outjson.put("access", accessJson(db, userId, repoId))
     }
 
@@ -161,12 +286,20 @@ class RepositoryService {
         Record r = db.fetchOne("select * from repository where repo_id = ?", repoId)
         if (r == null)
             throw new UserException("Repository not found.")
-        if (injson.has("name"))
-            r.set("name", injson.getString("name"))
+        if (injson.has("name")) {
+            String name = injson.getString("name", "")
+            if (name != null)
+                name = name.trim()
+            if (!name || name.length() > 100 || name.contains("/"))
+                throw new UserException("Invalid repository display name.")
+            r.set("name", name)
+        }
         if (injson.has("description"))
-            r.set("description", injson.getString("description"))
-        if (injson.has("defaultBranch"))
-            r.set("default_branch", injson.getString("defaultBranch"))
+            r.set("description", injson.getString("description", ""))
+        if (injson.has("defaultBranch")) {
+            String branch = injson.getString("defaultBranch", "")
+            r.set("default_branch", branch == null || branch.trim().isEmpty() ? null : branch.trim())
+        }
         if (injson.has("isActive"))
             r.set("is_active", injson.getBoolean("isActive") ? "Y" : "N")
         boolean visChanged = false
@@ -244,7 +377,8 @@ class RepositoryService {
     // ---------------------------------------------------------------- helpers
 
     private static Integer currentUser(ProcessServlet servlet) {
-        return (Integer) servlet.getUserData().getUserId()
+        def ud = servlet.getUserData()
+        return ud == null ? null : (Integer) ud.getUserId()
     }
 
     /** The caller's URL-safe handle (the repo namespace). */
@@ -290,7 +424,7 @@ class RepositoryService {
         o.put("visibility", r.getString("visibility"))
         Integer ownerId = r.getInt("owner_id")
         o.put("ownerId", ownerId)
-        o.put("owned", ownerId != null && ownerId == userId)
+        o.put("owned", ownerId != null && userId != null && ownerId == userId)
         o.put("defaultBranch", r.getString("default_branch"))
         o.put("discovered", r.getString("discovered"))
         o.put("isActive", r.getString("is_active"))
@@ -299,6 +433,21 @@ class RepositoryService {
         o.put("createdTs", r.getLong("created_ts"))
         o.put("checkoutUrl", (base ? base : "") + "/" + r.getString("repo_key"))
         return o
+    }
+
+    private static void addCounts(JSONObject o, Connection db, int repoId) {
+        Record issues = db.fetchOne("""select
+                count(*) as issue_count,
+                sum(case when status = 'open' then 1 else 0 end) as open_issue_count
+                from issue where repo_id = ?""", repoId)
+        Record mrs = db.fetchOne("""select
+                count(*) as merge_request_count,
+                sum(case when status = 'open' then 1 else 0 end) as open_merge_request_count
+                from merge_request where repo_id = ?""", repoId)
+        o.put("issueCount", issues?.getLong("issue_count") ?: 0L)
+        o.put("openIssueCount", issues?.getLong("open_issue_count") ?: 0L)
+        o.put("mergeRequestCount", mrs?.getLong("merge_request_count") ?: 0L)
+        o.put("openMergeRequestCount", mrs?.getLong("open_merge_request_count") ?: 0L)
     }
 
     private static String baseUrl() {

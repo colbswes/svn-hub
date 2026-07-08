@@ -62,6 +62,7 @@ class Login {
         if (!ok)
             return null
         UserData ud = UserCache.newUser(user, password, userId)
+        ud.putUserData("usedResetCode", viaResetCode)
         // Let the front-end gate admin-only UI (the back-end still enforces it).
         outjson.put("isAdmin", "Y".equals(rec.getString("is_admin")))
         // The front-end gates the app on an unverified email and shows the handle

@@ -16,7 +16,7 @@
         }
         const r = await Server.fileUploadSend('services/FileUpload', 'upload', 'the-file', data);
         if (r._Success)
-            Utils.showMessage('Success', 'File uploaded successfully.');
+            Utils.toast.success('File uploaded');
     });
 
 
