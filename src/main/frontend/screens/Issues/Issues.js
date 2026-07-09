@@ -1,4 +1,4 @@
-/* global $$, Utils, Server, DateTimeUtils, marked, Router */
+/* global $$, Utils, Server, DateTimeUtils, marked, Router, SvnHubUI */
 'use strict';
 
 (async function () {
@@ -14,6 +14,8 @@
         return;
     }
     let current = null;   // currently open issue number
+    const issueSlide = document.getElementById('iss-slide');
+    SvnHubUI.initPageSlide(issueSlide, 'list');
 
     function fmtDate(ms) {
         try {
@@ -63,13 +65,8 @@
     // deep links restore the exact view. The state keeps whatever the host
     // Repository screen put there (__repoSection etc.) so its popstate handling
     // still restores the Issues section first.
-    const VIEWS = {list: 'iss-view-list', detail: 'iss-view-detail', compose: 'iss-view-new'};
     function showView(name) {
-        Object.keys(VIEWS).forEach((k) => {
-            const el = document.getElementById(VIEWS[k]);
-            if (el)
-                el.style.display = k === name ? '' : 'none';
-        });
+        SvnHubUI.setPageSlidePage(issueSlide, name === 'compose' ? 'new' : name);
     }
 
     function issueUrl(val) {

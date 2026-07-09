@@ -135,8 +135,8 @@
         margin: 0;
     }
 </style>
-<div class="page-shell wrap-wide">
-    <div id="mr-view-list">
+<div class="page-shell wrap-wide t-page-slide ticket-page-slide" id="mr-slide">
+    <div class="t-page" id="mr-view-list" data-page-id="list">
         <header class="page-header">
             <div class="page-title-block">
                 <div class="eyebrow">Merge requests</div>
@@ -160,7 +160,7 @@
         </section>
     </div>
 
-    <div id="mr-view-detail" style="display:none;">
+    <div class="t-page" id="mr-view-detail" data-page-id="detail" style="display:none;">
         <div class="ticket-topbar">
             <push-button id="md-back" class="btn-sm">&larr; Merge requests</push-button>
             <div class="ticket-actions">
@@ -179,7 +179,6 @@
         <section class="ticket-diff-block">
             <div class="ticket-thread-title">
                 <h3>Changes</h3>
-                <span class="chip chip-copper">diff preview</span>
             </div>
             <div class="ticket-diff" id="md-diff"></div>
         </section>
@@ -199,7 +198,7 @@
         </section>
     </div>
 
-    <div id="mr-view-new" style="display:none;">
+    <div class="t-page" id="mr-view-new" data-page-id="new" style="display:none;">
         <div class="ticket-topbar">
             <push-button id="mn-back" class="btn-sm">&larr; Merge requests</push-button>
         </div>

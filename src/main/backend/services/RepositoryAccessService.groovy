@@ -16,7 +16,7 @@ import com.svnhub.RepoAccess
  */
 class RepositoryAccessService {
 
-    /** Current grants for a repository, plus the active users available to add. */
+    /** Current grants for a repository. */
     void getAccess(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
         Integer userId = currentUser(servlet)
         int repoId = injson.getInt("repoId")
@@ -38,19 +38,40 @@ class RepositoryAccessService {
             rows.put(o)
         }
         outjson.put("rows", rows)
+    }
 
-        // All active users (the picker supports both granting and updating, since grant() upserts).
-        List<Record> avail = db.fetchAll("""select user_id, user_name, full_name from users
-                where user_active = 'Y' order by user_name""")
+    /** Paginated active-user search for the access picker. */
+    void searchUsers(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
+        Integer userId = currentUser(servlet)
+        int repoId = injson.getInt("repoId")
+        RepoAccess.requireAdmin(db, userId, repoId)
+
+        String q = injson.getString("query", "")
+        q = q == null ? "" : q.trim().toLowerCase()
+        String like = "%" + q + "%"
+        int page = Math.max(0, injson.getInt("page", 0))
+        int pageSize = pageSizeOf(injson)
+        String where = """user_active = 'Y'
+                and (lower(user_name) like ?
+                    or lower(coalesce(handle, '')) like ?
+                    or lower(coalesce(full_name, '')) like ?)"""
+
+        long total = db.fetchCount("select user_id from users where " + where, like, like, like)
+        List<Record> recs = db.fetchAll(page, pageSize, """
+                select user_id, user_name, full_name from users
+                where """ + where + " order by user_name", like, like, like)
         JSONArray users = new JSONArray()
-        for (Record u : avail) {
+        for (Record u : recs) {
             JSONObject o = new JSONObject()
             o.put("userId", u.getInt("user_id"))
             o.put("userName", u.getString("user_name"))
             o.put("fullName", u.getString("full_name"))
             users.put(o)
         }
-        outjson.put("availableUsers", users)
+        outjson.put("rows", users)
+        outjson.put("total", total)
+        outjson.put("page", page)
+        outjson.put("pageSize", pageSize)
     }
 
     /** Grant or update a user's access to a repository. */
@@ -130,5 +151,14 @@ class RepositoryAccessService {
         if (!c)
             throw new UserException("SvnConfDir is not configured in application.ini.")
         return c + "/passwd"
+    }
+
+    private static int pageSizeOf(JSONObject injson) {
+        int n = injson.getInt("pageSize", 20)
+        if (n < 1)
+            n = 20
+        if (n > 100)
+            n = 100
+        return n
     }
 }

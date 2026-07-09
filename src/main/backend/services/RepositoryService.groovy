@@ -10,6 +10,9 @@ import org.kissweb.UserException
 import com.svnhub.SvnRepo
 import com.svnhub.SvnAuthManager
 import com.svnhub.RepoAccess
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Comparator
 
 /**
  * Repository management for SvnHub.
@@ -129,21 +132,36 @@ class RepositoryService {
                                where ra.repo_id = r.repo_id and ra.user_id = ? and ra.can_read = 'Y'))"""
             params = [userId, userId]
         }
-        String sql = """select c.revision as "revision",
-                c.repo_id as "repoId",
-                r.name as "repoName",
-                r.repo_key as "repoKey",
-                r.visibility as "visibility",
-                r.owner_id as "ownerId",
-                c.author as "author",
-                c.commit_ts as "commitTs",
-                c.message as "message",
-                c.changed_count as "changedCount"
+        String sql = """select c.revision,
+                c.repo_id,
+                r.name,
+                r.repo_key,
+                r.visibility,
+                r.owner_id,
+                c.author,
+                c.commit_ts,
+                c.message,
+                c.changed_count
                 from commit_cache c
                 join repository r on r.repo_id = c.repo_id
                 where """ + visWhere + """
                 order by c.commit_ts desc nulls last"""
-        JSONArray rows = db.fetchAllJSON(limit, sql, *params)
+        List<Record> recs = db.fetchAll(limit, sql, *params)
+        JSONArray rows = new JSONArray()
+        for (Record r : recs) {
+            JSONObject o = new JSONObject()
+            o.put("revision", r.getInt("revision"))
+            o.put("repoId", r.getInt("repo_id"))
+            o.put("repoName", r.getString("name"))
+            o.put("repoKey", r.getString("repo_key"))
+            o.put("visibility", r.getString("visibility"))
+            o.put("ownerId", r.getInt("owner_id"))
+            o.put("author", r.getString("author"))
+            o.put("commitTs", r.getLong("commit_ts"))
+            o.put("message", r.getString("message"))
+            o.put("changedCount", r.getInt("changed_count"))
+            rows.put(o)
+        }
         outjson.put("rows", rows)
     }
 
@@ -316,6 +334,72 @@ class RepositoryService {
             SvnAuthManager.regenerateRepoAuth(db, repoId, sharedPasswdPath())
     }
 
+    // ----------------------------------------------------------------- delete
+
+    /** Permanently delete a repository and its app-owned dependent data. */
+    void deleteRepository(JSONObject injson, JSONObject outjson, Connection db, ProcessServlet servlet) {
+        Integer userId = currentUser(servlet)
+        int repoId = injson.getInt("repoId")
+        RepoAccess.requireAdmin(db, userId, repoId)
+
+        Record r = db.fetchOne("select * from repository where repo_id = ?", repoId)
+        if (r == null)
+            throw new UserException("Repository not found.")
+
+        String repoName = r.getString("name")
+        String repoKey = r.getString("repo_key")
+        String confirm = injson.getString("confirm", "")
+        if (confirm != null)
+            confirm = confirm.trim()
+        if (confirm != repoName)
+            throw new UserException("Type the repository name exactly to delete it.")
+
+        File activeRepoDir = safeRepoDir(r.getString("fs_path"))
+        File movedRepoDir = null
+        if (activeRepoDir != null && activeRepoDir.exists()) {
+            Path movedPath = activeRepoDir.toPath().resolveSibling(
+                    activeRepoDir.getName() + ".deleted-" + repoId + "-" + System.currentTimeMillis())
+            Files.move(activeRepoDir.toPath(), movedPath)
+            movedRepoDir = movedPath.toFile()
+        }
+
+        try {
+            db.execute("delete from mr_comment where mr_id in (select mr_id from merge_request where repo_id = ?)", repoId)
+            db.execute("delete from merge_request where repo_id = ?", repoId)
+            db.execute("delete from issue_comment where issue_id in (select issue_id from issue where repo_id = ?)", repoId)
+            db.execute("delete from issue where repo_id = ?", repoId)
+            db.execute("delete from commit_cache_path where commit_id in (select commit_id from commit_cache where repo_id = ?)", repoId)
+            db.execute("delete from commit_cache where repo_id = ?", repoId)
+            db.execute("delete from working_copy_state where repo_id = ?", repoId)
+            db.execute("delete from access_daily_rollup where repo_id = ?", repoId)
+            db.execute("update access_event set repo_id = null where repo_id = ?", repoId)
+            db.execute("delete from repository_access where repo_id = ?", repoId)
+            db.execute("delete from repository where repo_id = ?", repoId)
+        } catch (Exception e) {
+            if (movedRepoDir != null && movedRepoDir.exists() && activeRepoDir != null && !activeRepoDir.exists()) {
+                try {
+                    Files.move(movedRepoDir.toPath(), activeRepoDir.toPath())
+                } catch (Exception ignored) {
+                }
+            }
+            throw e
+        }
+
+        boolean fileCleanupWarning = false
+        if (movedRepoDir != null && movedRepoDir.exists()) {
+            try {
+                deleteTree(movedRepoDir)
+            } catch (Exception ignored) {
+                fileCleanupWarning = true
+            }
+        }
+
+        outjson.put("deleted", true)
+        outjson.put("repoId", repoId)
+        outjson.put("repoKey", repoKey)
+        outjson.put("fileCleanupWarning", fileCleanupWarning)
+    }
+
     // ------------------------------------------------------------------- scan
 
     /**
@@ -401,6 +485,25 @@ class RepositoryService {
         if (!c)
             throw new UserException("SvnConfDir is not configured in application.ini.")
         return c + "/passwd"
+    }
+
+    private static File safeRepoDir(String fsPath) {
+        if (!fsPath)
+            return null
+        File root = new File(reposRoot()).getCanonicalFile()
+        File repoDir = new File(fsPath).getCanonicalFile()
+        if (repoDir.equals(root) || !repoDir.toPath().startsWith(root.toPath()))
+            throw new UserException("Repository path is outside the configured repository root.")
+        return repoDir
+    }
+
+    private static void deleteTree(File root) {
+        if (root == null || !root.exists())
+            return
+        Files.walk(root.toPath()).withCloseable { paths ->
+            paths.sorted(Comparator.reverseOrder())
+                    .forEach { Path p -> Files.deleteIfExists(p) }
+        }
     }
 
     /** {read, write, admin} for the caller on a repo (an admin gets all). */

@@ -4,15 +4,21 @@
 (async function () {
 
     const WS = 'services/DiscoverService';
+    const REPO_PAGE_SIZE = 48;
+    const PEOPLE_PAGE_SIZE = 48;
 
     const guest = Utils.getData('guest') === true;
     let allRepos = [];
     let allPeople = [];
+    let repoTotal = 0;
+    let peopleTotal = 0;
+    let repoPage = 0;
+    let peoplePage = 0;
     let filter = 'all'; // all | repos | people
     let repoTerm = '';
     let peopleTerm = '';
     let repoServerSearchActive = false;
-    let searchToken = 0;
+    let searchRunner = null;
     let hasSearched = false;
     let browseMode = false;
 
@@ -68,8 +74,8 @@
 
     function syncSearchPlaceholder() {
         const ctl = $$('disc-search');
-        if (ctl && ctl.element)
-            ctl.element.setAttribute('placeholder', searchPlaceholders[filter] || searchPlaceholders.all);
+        if (ctl && ctl.setPlaceholder)
+            ctl.setPlaceholder(searchPlaceholders[filter] || searchPlaceholders.all);
     }
 
     function applyRepoSort(rows) {
@@ -86,6 +92,21 @@
 
     function applyPeopleSort(rows) {
         return rows.slice();
+    }
+
+    function resultCount(shown, total, one, many) {
+        if (total > shown)
+            return shown + ' of ' + plural(total, one, many);
+        return plural(shown, one, many);
+    }
+
+    function loadMoreButton(kind, shown, total, label) {
+        if (shown >= total)
+            return '';
+        return '<button type="button" class="discover-load-more" data-load-more="' + esc(kind) + '">' +
+            '<span>Load more ' + esc(label) + '</span>' +
+            '<span>Showing ' + esc(shown) + ' of ' + esc(total) + '</span>' +
+        '</button>';
     }
 
     function renderRepos() {
@@ -108,9 +129,9 @@
         $$('result-sub').setValue(term
             ? 'Results for "' + esc(term) + '" across repositories'
             : (browseMode
-                ? 'Repositories you can see, most recently active first'
+                ? 'Currently showing most active repositories'
                 : 'Public and accessible Subversion repositories'));
-        $$('repos-count').setValue(plural(rows.length, 'repo', 'repos'));
+        $$('repos-count').setValue(resultCount(rows.length, repoTotal || rows.length, 'repo', 'repos'));
 
         hostPanel.hidden = rows.length === 0;
         if (!rows.length) {
@@ -118,7 +139,8 @@
             return 0;
         }
 
-        host.innerHTML = rows.map(repoCard).join('');
+        host.innerHTML = rows.map(repoCard).join('') +
+            (repoServerSearchActive ? loadMoreButton('repos', allRepos.length, repoTotal, 'repositories') : '');
         return rows.length;
     }
 
@@ -142,7 +164,7 @@
         document.getElementById('people-subtitle').textContent = term
             ? 'People matching "' + term + '"'
             : 'Find other people using Subversion.';
-        $$('people-count').setValue(plural(rows.length, 'person', 'people'));
+        $$('people-count').setValue(resultCount(rows.length, peopleTotal || rows.length, 'person', 'people'));
 
         hostPanel.hidden = rows.length === 0;
         if (!rows.length) {
@@ -150,7 +172,8 @@
             return 0;
         }
 
-        host.innerHTML = rows.map(personCard).join('');
+        host.innerHTML = rows.map(personCard).join('') +
+            (hasSearched ? loadMoreButton('people', allPeople.length, peopleTotal, 'people') : '');
         return rows.length;
     }
 
@@ -206,6 +229,22 @@
         syncDiscoverEmpty(repoCount, peopleCount);
     }
 
+    function expandVisibleResultSections() {
+        document.querySelectorAll('.discover-result-section').forEach((section) => {
+            if (section.hidden)
+                return;
+            const btn = section.querySelector('.discover-result-head');
+            const body = section.querySelector('.ins-section-body');
+            section.classList.remove('collapsed', 'animating');
+            if (btn)
+                btn.setAttribute('aria-expanded', 'true');
+            if (body) {
+                body.inert = false;
+                body.style.height = '';
+            }
+        });
+    }
+
     function initDiscoverSections() {
         SvnHubUI.initExpandableSections({
             sectionSelector: '.discover-result-section',
@@ -225,51 +264,62 @@
             history.replaceState(history.state, document.title, next);
     }
 
-    async function runSearch() {
+    async function runSearch(token = null) {
         const q = $$('disc-search').getValue().trim();
         if (!q) {
             clearSearch();
             return;
         }
+        if (token == null)
+            token = searchRunner.cancel();
         repoTerm = q;
         peopleTerm = q;
         syncSearchClear();
         syncUrlQuery(q);
 
-        const token = ++searchToken;
+        repoPage = 0;
+        peoplePage = 0;
+        repoTotal = 0;
+        peopleTotal = 0;
 
         const [repoRows, peopleRows] = await Promise.all([
-            Server.callQuiet(WS, 'searchRepos', {query: q, page: 0, pageSize: 100}),
-            Server.callQuiet(WS, 'searchUsers', {query: q, page: 0, pageSize: 48})
+            Server.callQuiet(WS, 'searchRepos', {query: q, page: repoPage, pageSize: REPO_PAGE_SIZE}),
+            Server.callQuiet(WS, 'searchUsers', {query: q, page: peoplePage, pageSize: PEOPLE_PAGE_SIZE})
         ]);
 
-        if (token !== searchToken)
+        if (!searchRunner.isCurrent(token))
             return;
 
         allRepos = (repoRows._Success && repoRows.rows) ? repoRows.rows : [];
         allPeople = (peopleRows._Success && peopleRows.rows) ? peopleRows.rows : [];
+        repoTotal = repoRows._Success ? Number(repoRows.total || allRepos.length) : allRepos.length;
+        peopleTotal = peopleRows._Success ? Number(peopleRows.total || allPeople.length) : allPeople.length;
         repoServerSearchActive = !!q;
         hasSearched = true;
         browseMode = false;
 
         renderAll();
+        expandVisibleResultSections();
     }
 
-    // Default "Browse" listing when there is no query: repositories the viewer
-    // can see, most recently active first. Signed-in users get owned + granted
-    // + public repos; guests get the public search listing.
+    // Default "Browse" listing when there is no query. Signed-in users get owned
+    // + granted + public repos; guests get the public search listing.
     async function loadBrowse() {
-        const token = ++searchToken;
+        const token = searchRunner.cancel();
         const res = guest
-            ? await Server.callQuiet(WS, 'searchRepos', {query: '', page: 0, pageSize: 100})
+            ? await Server.callQuiet(WS, 'searchRepos', {query: '', page: 0, pageSize: REPO_PAGE_SIZE})
             : await Server.callQuiet('services/RepositoryService', 'searchRepositories', {query: ''});
-        if (token !== searchToken)
+        if (!searchRunner.isCurrent(token))
             return;
         const rows = (res._Success && res.rows) ? res.rows.slice() : [];
         rows.sort((a, b) =>
             (Number(b.headRevisionTs || b.createdTs || 0)) - (Number(a.headRevisionTs || a.createdTs || 0)));
         allRepos = rows;
         allPeople = [];
+        repoTotal = res._Success ? Number(res.total || rows.length) : rows.length;
+        peopleTotal = 0;
+        repoPage = 0;
+        peoplePage = 0;
         repoTerm = '';
         peopleTerm = '';
         repoServerSearchActive = false;
@@ -278,8 +328,50 @@
         renderAll();
     }
 
-    async function clearSearch() {
-        $$('disc-search').clear();
+    async function loadMore(kind) {
+        const q = $$('disc-search').getValue().trim();
+        if (!q || !hasSearched)
+            return;
+        const token = searchRunner.cancel();
+        if (kind === 'repos') {
+            const nextPage = repoPage + 1;
+            const res = await Server.callQuiet(WS, 'searchRepos', {
+                query: q,
+                page: nextPage,
+                pageSize: REPO_PAGE_SIZE
+            });
+            if (!searchRunner.isCurrent(token))
+                return;
+            if (res._Success) {
+                repoPage = nextPage;
+                allRepos = allRepos.concat(res.rows || []);
+                repoTotal = Number(res.total || allRepos.length);
+                renderAll();
+            }
+            return;
+        }
+        if (kind === 'people') {
+            const nextPage = peoplePage + 1;
+            const res = await Server.callQuiet(WS, 'searchUsers', {
+                query: q,
+                page: nextPage,
+                pageSize: PEOPLE_PAGE_SIZE
+            });
+            if (!searchRunner.isCurrent(token))
+                return;
+            if (res._Success) {
+                peoplePage = nextPage;
+                allPeople = allPeople.concat(res.rows || []);
+                peopleTotal = Number(res.total || allPeople.length);
+                renderAll();
+            }
+        }
+    }
+
+    async function clearSearch(fromControl = false) {
+        searchRunner.cancel();
+        if (!fromControl)
+            $$('disc-search').clear();
         repoTerm = '';
         peopleTerm = '';
         syncSearchClear();
@@ -318,11 +410,20 @@
     $$('filter-repos').onclick(() => setFilter('repos'));
     $$('filter-people').onclick(() => setFilter('people'));
 
-    $$('disc-search').onEnter(runSearch);
-    document.getElementById('disc-search-clear').addEventListener('click', clearSearch);
-    $$('disc-search').element.addEventListener('input', () => syncSearchClear());
+    searchRunner = SvnHubUI.createDebouncedRunner(runSearch, 220);
+    $$('disc-search').onSearch(() => searchRunner.runNow());
+    $$('disc-search').onClear(() => clearSearch(true));
+    $$('disc-search').element.addEventListener('input', () => {
+        searchRunner.cancel();
+        syncSearchClear();
+    });
 
     document.getElementById('repo-results').addEventListener('click', (e) => {
+        const more = e.target.closest('[data-load-more="repos"]');
+        if (more) {
+            loadMore('repos');
+            return;
+        }
         const owner = e.target.closest('.repo-owner-link');
         if (owner) {
             e.stopPropagation();
@@ -341,6 +442,11 @@
             SvnHubUI.openRepo(repoFromCard(card), exploreOrigin);
     });
     document.getElementById('people-results').addEventListener('click', (e) => {
+        const more = e.target.closest('[data-load-more="people"]');
+        if (more) {
+            loadMore('people');
+            return;
+        }
         const card = e.target.closest('.person-card');
         if (card)
             SvnHubUI.openPerson(card.getAttribute('data-handle'), exploreOrigin);

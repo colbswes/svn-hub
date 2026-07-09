@@ -75,7 +75,14 @@
         return '<div class="card card-pad repo-empty"><h3>' + esc(title) + '</h3><p class="muted">' + esc(body) + '</p></div>';
     }
 
+    function hideLoading() {
+        const loading = document.getElementById('person-loading');
+        if (loading)
+            loading.hidden = true;
+    }
+
     function showError(title, body) {
+        hideLoading();
         document.getElementById('person-body').hidden = true;
         const box = document.getElementById('person-error');
         box.hidden = false;
@@ -197,10 +204,12 @@
 
     // ---- activity feed (item: deep-link + relative time + private badge) ----
     function renderActivity(rows) {
+        rows = rows || [];
         const host = document.getElementById('person-activity');
+        host.classList.toggle('revision-spine', rows.length > 0);
         $$('person-activity-count').setValue(plural(rows.length, 'commit', 'commits'));
         if (!rows.length) {
-            host.innerHTML = '<p class="muted" style="margin:0;">' +
+            host.innerHTML = '<p class="muted person-activity-empty">' +
                 (viewerCanSeePrivate ? 'No visible commit activity yet.' : 'No public commit activity yet.') + '</p>';
             return;
         }
@@ -272,6 +281,7 @@
         svnUrlPrefix = (cut > -1 ? url.substring(0, cut) : url) + '/' + ownerHandle + '/';
     }
 
+    hideLoading();
     document.getElementById('person-body').hidden = false;
     document.getElementById('person-avatar').textContent = SvnHubUI.personInitials(display || handle);
     document.getElementById('person-name').textContent = display;
@@ -331,6 +341,8 @@
     }
 
     let nameEditState = null;
+    let nameSavePending = false;
+    let nameSaveToken = 0;
 
     function applyProfileName(name) {
         const nextName = name || profile.handle || handle;
@@ -352,13 +364,58 @@
             btn.classList.toggle('is-editing', editing);
             btn.setAttribute('aria-label', editing ? 'Cancel name edit' : 'Edit name');
             btn.setAttribute('title', editing ? 'Cancel edit' : 'Edit name');
+            const swap = btn.querySelector('.t-icon-swap');
+            if (swap)
+                swap.setAttribute('data-state', editing ? 'b' : 'a');
         }
         if (saveBtn)
             saveBtn.hidden = !editing;
     }
 
+    function setNameSavePending(pending) {
+        nameSavePending = pending;
+        const btn = document.getElementById('person-name-edit');
+        if (!btn)
+            return;
+        btn.disabled = pending;
+        btn.setAttribute('aria-busy', pending ? 'true' : 'false');
+        btn.setAttribute('title', pending ? 'Saving name' : 'Edit name');
+    }
+
+    function syncSavedProfileName(name, expectedVisibleName) {
+        if (nameEditState) {
+            nameEditState.current = name;
+            if (normalizeEditedName(currentProfileName()) !== expectedVisibleName) {
+                profile.fullName = name;
+                return;
+            }
+        }
+        applyProfileName(name);
+    }
+
+    async function saveProfileNameOptimistically(original, next) {
+        const token = ++nameSaveToken;
+        setNameSavePending(true);
+        let res = null;
+        try {
+            res = await Server.call('services/AccountService', 'updateProfile', {fullName: next});
+        } catch (e) {
+            res = null;
+        }
+        if (token !== nameSaveToken)
+            return;
+        if (res && res._Success) {
+            syncSavedProfileName(res.fullName != null ? res.fullName : next, next);
+            Utils.toast.success('Profile saved');
+        } else {
+            syncSavedProfileName(original, next);
+            Utils.toast.error('Couldn\'t save name');
+        }
+        setNameSavePending(false);
+    }
+
     function startInlineNameEdit() {
-        if (nameEditState)
+        if (nameEditState || nameSavePending)
             return;
         const nameEl = document.getElementById('person-name');
         if (!nameEl)
@@ -386,11 +443,11 @@
             const original = nameEditState ? nameEditState.current : current;
             const next = save ? normalizeEditedName(nameEl.textContent) : original;
             if (save && next === original) {
-                restoreName(original, false);
+                restoreName(original);
                 return;
             }
             if (!save || !next) {
-                restoreName(original, false);
+                restoreName(original);
                 return;
             }
             if (next.length > 200) {
@@ -398,42 +455,26 @@
                 nameEl.focus();
                 return;
             }
-            let savedName = original;
-            let saved = false;
-            try {
-                const res = await Server.call('services/AccountService', 'updateProfile', {fullName: next});
-                if (res._Success && res.fullName != null) {
-                    savedName = res.fullName;
-                    saved = true;
-                }
-            } catch (e) {
-                savedName = original;
-            }
-            restoreName(savedName, saved);
+            restoreName(next);
+            saveProfileNameOptimistically(original, next);
         }
 
-        function restoreName(name, saved) {
+        function restoreName(name) {
             document.removeEventListener('pointerdown', onPointerDownOutside, true);
             nameEl.removeEventListener('keydown', onKeyDown);
             nameEl.removeEventListener('blur', onBlur);
             nameEl.removeEventListener('paste', onPaste);
-            nameEl.textContent = name;
             nameEl.removeAttribute('contenteditable');
             nameEl.removeAttribute('spellcheck');
             nameEl.removeAttribute('role');
             nameEl.removeAttribute('aria-label');
             nameEl.removeAttribute('aria-multiline');
-            profile.fullName = name;
             if (row)
                 row.classList.remove('is-editing');
             setNameEditButtonEditing(false);
-            const avatarEl = document.getElementById('person-avatar');
-            if (avatarEl)
-                avatarEl.textContent = SvnHubUI.personInitials(name);
             clearProfileNameSelection(nameEl);
             nameEditState = null;
-            if (saved)
-                Utils.toast.success('Save successful');
+            applyProfileName(name);
         }
 
         function onPointerDownOutside(e) {
