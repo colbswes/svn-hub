@@ -5,6 +5,39 @@
 
 **CRITICAL: Kiss is a generic, application-neutral framework. All changes to Kiss core code, configuration options, documentation, and comments must remain completely free of references to any specific application, third-party product, or proprietary technology. Never reference specific application names, specific non-SQL databases, or any application-specific concepts in framework code or documentation. Use generic terms such as "alternative data store" rather than naming specific products.**
 
+### Keeping Generic Code Generic (operational checklist)
+
+The CRITICAL rule above is easy to state and easy to violate in practice. Apply these operational rules whenever a change would touch generic framework code.
+
+**Generic (framework) — application-neutral; treat as read-only, change only when unavoidable and only generically:**
+- `src/main/frontend/kiss/**` — frontend framework and components
+- `src/main/core/**` — core Java framework
+- `src/main/precompiled/**` — shared utilities (an application may add its own utility classes here, but must not alter framework-owned ones)
+- `AI/KnowledgeBase.md` — this document: the generic Kiss-framework reference (see "Documentation and where knowledge lives" below)
+
+**Application-specific — the normal work area; all app code, values, and branding go here:**
+- `src/main/backend/**` — services and business logic
+- `src/main/frontend/**` except `kiss/` — application screens, application theme CSS, application JavaScript
+- `src/main/backend/application.ini` — all secrets, URLs, keys, and per-deployment config
+- `AI/ApplicationDetails.md` — this application's own notes (per application; never shared)
+
+**Documentation and where knowledge lives.** This file, `AI/KnowledgeBase.md`, is the generic Kiss-framework reference. It is itself a shared framework artifact: it must read **identically for every Kiss application** (kept in sync with the canonical framework repository) and must contain **only** generic, application-neutral material. Application-specific notes — anything that names or is tuned to one application — belong in that application's `AI/ApplicationDetails.md`, which is never shared. When generic framework knowledge or code first appears inside an application, **upstream it**: move the code into the framework tree and the documentation into this file, so every application benefits and the shared artifacts stay in sync; keep only the application-specific remainder in the app.
+
+**Rules for any change that does touch a generic file:**
+1. No application-specific references — no application, product, or company names, and no application-domain concepts, in code, comments, documentation, or identifiers. Use neutral generic terms.
+2. No brand-specific values baked in — colors, logos, copy, fonts, URLs, or dimensions tuned to one application. (For example, never hardcode a brand color such as `rgba(r, g, b)` inside a framework component.)
+3. No secrets or environment literals — URLs, API keys, passwords, and tokens belong in `application.ini`, read via `MainServlet.getEnvironment()`.
+4. Parameterize instead of hardcoding — expose application-specific values as CSS custom properties, configuration keys, or override hooks WITH NEUTRAL DEFAULTS in the framework; the application supplies its specifics from the application layer (application theme CSS, `application.ini`). Example: the framework reads a `--glow-color` CSS variable with a neutral default, and the application sets its own brand color in its theme file.
+5. The change must be a generic capability any Kiss application could use — never something that only makes sense for one application.
+6. When a component's behavior or API changes, update its documentation in `src/main/frontend/kiss/component/components.js` in the same change.
+
+**Before committing, self-check the diff of every generic file:**
+- Grep it for the application's name and for any brand color/value — there must be ZERO matches in generic files.
+- Confirm the change would make sense in a brand-new, unrelated Kiss application.
+- In the commit message / PR description, explicitly list every generic framework file you changed and why, so it can be reviewed and synchronized across the framework and its applications.
+
+If a change seems to require application-specific behavior inside a generic file: stop, move it to the application layer instead, or ask.
+
 ## Overview
 KISS is a **Kiss Framework application** - a full-stack Java web framework designed for rapid business application development. It includes both front-end and back-end already integrated and running as a basic example application. The framework emphasizes simplicity, productivity, and the ability to make changes while the system is running without requiring compilation or restarts.
 
@@ -87,7 +120,7 @@ Kiss/
    - Automatic file management
 
 6. **LLM Integration**
-   - Ollama integration ready (`org.kissweb.llm.Ollama`) — single-prompt `send()` (`/api/generate`) plus multi-turn, role-structured `chat(messages)` / `chat(messages, tools)` (`/api/chat`), which gives correct per-model chat templating, explicit system/user/assistant roles, and a `tools` hook for function calling
+   - Ollama integration ready (`org.kissweb.llm.Ollama`) — single-prompt `send()` (`/api/generate`) plus multi-turn, role-structured `chat(messages)` / `chat(messages, tools)` (`/api/chat`), which gives correct per-model chat templating, explicit system/user/assistant roles, and a `tools` hook for function calling. The blocking calls request `stream:false` (a single JSON object). Streaming overloads `send(prompt, Consumer<String> onToken)` and `chat(messages, onToken)` request `stream:true`, deliver each chunk to `onToken` as the model produces it, and also return the full assembled text (pass `null` for `onToken` to just assemble); they read Ollama's newline-delimited stream via `RestClient.streamCall`
    - OpenAI API support
 
 7. **Desktop Support**
@@ -258,6 +291,25 @@ All compiled classes go to `work/exploded/WEB-INF/classes/`
 - Configurable user inactivity timeout
 - UUID-based session tracking
 
+### Service-Side Authentication (the "service decides" pattern)
+
+By default every web-service method is authenticated **before** it is dispatched: an invalid/expired session returns the standard "not logged in" response (`_ErrorCode = 2`) and the service never runs.
+
+A method registered with `MainServlet.allowWithoutAuthentication("package/Class", "method")` (called from `KissInit.groovy`) instead runs **whether or not** the caller is logged in — the "call the service first, then let it decide" model. Inside such a service (signature `(JSONObject in, JSONObject out, Connection db, ProcessServlet servlet)`), use these `ProcessServlet` helpers:
+
+| Method | Behavior |
+|---|---|
+| `servlet.isLoggedIn()` | `true` if a valid session is attached to this request — branch on it to do one thing when logged in, another when not |
+| `servlet.getUserData()` | the `UserData` for the session, or `null` when not logged in |
+| `servlet.getUserData(key)` | a per-session value, or `null` when the key is absent **or** not logged in (null-safe) |
+| `servlet.requireLogin()` | abort the call with the standard `_ErrorCode = 2` response when not logged in (so the front-end routes to login); a no-op when logged in |
+
+`requireLogin()` throws `org.kissweb.restServer.LoginRequiredException`; the framework detects it (in `errorReturn`, walking the cause chain) and converts it to the same `_ErrorCode = 2` response a normally-protected method produces — so it works uniformly across Groovy, Java, compiled-Java, and Lisp services without any per-runner code.
+
+The front-end completes the loop: any `_ErrorCode = 2` triggers `Server.logout(true)`, which clears `AppState` and routes to `/login` **carrying the current location as the `return`** — so after re-authenticating, the user lands back on the page they were on (session-expiry resume). An intentional logout (`Server.logout()`) goes to `/login` without a return. See [Client-Side Routing](#client-side-routing-router).
+
+**Server-restart detection (boot id).** Sessions live in the in-memory `UserCache`, so a back-end restart invalidates them all — but the *client's* token persists in `AppState`, so without help the browser would resume onto a dead session. To prevent that, `MainServlet.getBootId()` returns a UUID generated once per server start; it's included in every response as `_BootId`. The front-end records it at login (`Server.setBootId` from the `Login` response) and, at startup before routing, `Server.verifyServerInstance()` makes one unauthenticated `LoginRequired` call and compares: if the boot id changed, the back end was restarted, so it clears the persisted session and forces a clean re-login (no resume) with a "server was restarted" notice. A restart while the app is open is still caught on the next call by the normal `_ErrorCode = 2` path.
+
 ### CORS and Reverse Proxies (web-secure.xml / web-unsafe.xml)
 
 Kiss ships two web.xml variants in `src/main/core/WEB-INF/`:
@@ -330,6 +382,66 @@ Kiss implements all three OAuth 2.1 roles. Each is inert unless configured (no r
   `getAccessToken()` throws `OAuthAuthorizationRequiredException` when an interactive login is needed.
 
 **Shared database:** the client persists its cached discovery, registration, and tokens in the **same** `oauth.db` the authorization server uses (reusing `OAuthSqliteStore`'s connection and lock) — there is no separate client database. All `oauth.db` access (AS and client) goes through the Kiss `org.kissweb.database` API, never raw JDBC.
+
+### Client-Side State Persistence (`AppState`)
+
+`src/main/frontend/kiss/AppState.js` is the framework's single client-side state store. It holds arbitrary front-end state that must survive page navigation and reload; the session token is not special — it is the reserved entry `_uuid` stored alongside everything else. It is the **only** module permitted to access `window.localStorage` / `window.sessionStorage` directly (the same layering rule DOMUtils applies to the DOM).
+
+The backing store is chosen once at startup from `SystemInfo.stateStore` (in `src/main/frontend/SystemInfo.js`):
+
+| Value | Backing store | Behavior |
+|---|---|---|
+| `'session'` (default) | sessionStorage | survives reload; **per-tab** (each tab is its own isolated session, so two tabs never clobber each other's state); cleared on tab close |
+| `'local'` | localStorage | survives reload, new tabs, and Electron restarts; **shared** across tabs of the origin |
+| `'memory'` | in-memory only | classic single-page behavior; lost on reload |
+
+Per-tab (`'session'`) is the default. Consequence: a new browser tab starts with no token and so requires its own login — the session does **not** carry across tabs (reload within a tab still resumes). If Web Storage is unavailable (private mode, disabled, quota), `AppState` falls back to in-memory so the app still runs. Keys are namespaced (`kiss.`) so `clear()` removes only Kiss state. Values are JSON-serialized (no `Date`/`Map`/functions survive). (There is no cross-tab logout coordination — under the per-tab default it's unnecessary.)
+
+API (all static): `init()`, `set(key, value)` (`undefined` removes), `get(key)`, `has(key)`, `remove(key)`, `keys()`, `clear()`, `backend()`.
+
+**Cross-screen app data** — `Utils.saveData(key, val)` / `getData(key)` / `getAndEraseData(key)` are backed by `AppState` (under a `data.` sub-namespace, so they can't collide with `_uuid`/`_bootId`). So data passed between screens now survives reload and is per-tab — the old in-memory `Utils.globalData` (which a router-driven reload would wipe) is gone.
+
+`Server.js` consumes it: `Server.setUUID()` writes `_uuid` through `AppState`, the `Server.uuid` getter reads it, and `Server.logout()` calls `AppState.clear()`. The bootstrap (`src/main/frontend/kiss/bootstrap.js`) loads `AppState.js` and calls `AppState.init()` before `Server.js`.
+
+`AppState` exposes the persisted `_uuid`; the [Router](#client-side-routing-router) uses it for session resume.
+
+### Client-Side Routing (`Router`)
+
+`src/main/frontend/kiss/Router.js` is a hash-based client-side router that gives each screen its own URL. Hash routing (`#/controls`, `#/customer/123`) needs no server-side URL rewriting, so it works identically on the dev static server, `file://`, Electron, and a deployed WAR. The hash changes per screen (deep-linkable, bookmarkable) and the browser Back/Forward buttons become in-app navigation.
+
+It maps the hash onto Kiss's two navigation levels: **full-body screens** (a shell or login, loaded by replacing `document.body`) and **sub-screens** (loaded into a shell region such as `app-screen-area`). Routes are registered in the application-owned **`src/main/frontend/routes.js`** via `Router.add(path, def)`; `index.js` calls `Router.start()` once components are loaded.
+
+Route definition fields: `page` (loadPage path, or a function returning one — used for device-aware mobile/desktop selection), `tag` (container id; omit for full-body — defaults to the home shell's region when fallback routing is on), `shell` (the route hosting a sub-screen; **defaults to the default route**, so it's usually omitted), `focus`, and `auth` (default `true`; set `false` for public routes like login). Path params (`:id`) are parsed, passed to the screen via `loadPage`'s `argv`, and readable with `Router.params()`, so a deep-linked screen can rebuild its state from the URL. A `?tag=` on the URL (or `Router.go(path, tag)`) overrides a screen's region at navigation time.
+
+**File-based fallback** (`Router.setScreenRoot(root, {shell, tag})`): with it enabled, a URL matching no registered route is loaded as a screen *path* under `root` — e.g. root `'screens'` makes `#/Reports/Daily` load `screens/Reports/Daily` into the configured shell/tag, no `Router.add` needed. Register routes only for screens needing a clean/stable URL, params, or special metadata; the rest resolve by convention. Fallback screens always require auth; `..`/empty segments are rejected (no traversal out of the root); and note this makes every screen file under the root URL-addressable (the route table is no longer an allowlist).
+
+API (all static): `add`, `setDefault`, `setScreenRoot`, `start`, `isStarted`, `go(path, tag?)` (push history), `replace(path)` (no Back step), `params()`, `query()`, `returnTarget()`, `current()`.
+
+Dispatch (on `start` and every `hashchange`): match the route → if `auth !== false` and `AppState.get('_uuid')` is absent, `replace('/login?return=<hash>')` → otherwise ensure the shell occupies the body (if any), then `loadPage` the screen. **Session resume** falls out of this: a deep link with a persisted `_uuid` loads straight through, validated lazily by the first `/rest` call (a stale session returns `_ErrorCode 2` → `Server.logout()` → login with a return-URL).
+
+Login/logout integration: `login.js` calls `Router.replace(Router.query().return || '/')` on success (so Back doesn't return to login); `Server.logout()` calls `Router.go('/login')` when the router is active (else falls back to `location.reload()`). The old global `DOMUtils.preventNavigation` back-button blocker was retired from the login screens — Back now navigates between screens (the intended behavior); `preventNavigation` remains available as an opt-in per-screen unsaved-changes guard.
+
+### Browser Security: CSP and Security Headers
+
+The entire Content-Security-Policy is delivered as an **HTTP response header** by `SecurityHeadersFilter` (`src/main/core/org/kissweb/restServer/SecurityHeadersFilter.java`). It self-registers via a `@WebFilter("/*")` annotation (no `web.xml` entry, the same way `MCPServerBase` servlets use `@WebServlet`), so it ships entirely inside the application WAR and needs no servlet-container configuration. CSP is **not** delivered via a `<meta>` tag: the `Content-Security-Policy-Report-Only` form used during rollout is invalid in a meta tag (browsers ignore it), and a header is the single source of truth for the production/Electron deployments (all served by Tomcat).
+
+- The XSS-relevant policy is the constant `SecurityHeadersFilter.CONTENT_SECURITY_POLICY` (`script-src 'self'`, `object-src 'none'`, `style-src 'self' 'unsafe-inline'` for CKEditor/AG-Grid, `img-src 'self' data: blob:` for `binaryCall` images, `connect-src 'self' http://localhost:8080` for cross-origin dev, etc.). A separated production back-end must be added to `connect-src`.
+- It **ships enforcing**: the filter's `CSP_REPORT_ONLY` flag is `false`, sending the XSS policy as `Content-Security-Policy` (violations are blocked, not merely logged). To re-validate after a policy change, set `CSP_REPORT_ONLY = true` to return to `Content-Security-Policy-Report-Only` (violations logged, nothing blocked), exercise every screen until the console is clean, then flip back. **Validate by browsing the app via the Tomcat origin `http://localhost:8080`** — the dev static server on `:8000` (a prebuilt `SimpleWebServer.jar`) cannot set headers, and `file://` has no server, so those contexts receive no CSP.
+- The filter always also sends the header-only protections: `Content-Security-Policy: frame-ancestors 'none'` + `X-Frame-Options: DENY` (clickjacking, enforced regardless of rollout phase), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and `Strict-Transport-Security` (only when `request.isSecure()`).
+
+The CSP allows **one** inline script: the byte-stable bootstrap kernel in `index.html`, pinned by a `'sha256-…'` in `script-src` (everything else is external, served under `'self'`). Inline `<style>` is allowed via `style-src 'unsafe-inline'`. The kernel carries no per-deployment values, so its hash is stable; if it is ever edited, recompute the hash and update `SecurityHeadersFilter`.
+
+### Cache Busting (force-refresh every file on upgrade)
+
+Kiss refreshes **all** downloaded files on a new release from a single version number, with no server configuration (works on the dev static server, `file://`, Tomcat, and Electron). It solves the chicken-and-egg problem — the version that drives busting can't itself be served stale — by keeping the version in the only perpetually-fresh file, `index.html`.
+
+- **Version + master switch** live in `index.html`: `<meta name="kiss-version">` and `<meta name="kiss-cache-control">` (set `false` in dev to disable busting entirely — no `?ver`, no `?now`). These are the only per-deploy cache values. The source ships with `EDIT-1` / `false`.
+- **`./bld war` auto-stamps production values** (`Tasks.stampVersion()`): it sets `kiss-version` to a fresh UUID, `kiss-cache-control` to `true`, and `SystemInfo.releaseDate` to the build date — but only in the WAR's staged copies (`work/exploded`), so the source keeps its `EDIT` placeholders. It edits only the meta values, never the kernel, so the CSP hash is unaffected. Every WAR therefore force-refreshes all clients with no manual version bump. **After the WAR is jarred, `war()` restores the staged `index.html` and `SystemInfo.js` from source** (`copyForce`, mirroring its `web-secure.xml`→jar→`web-unsafe.xml` swap), so `work/exploded` is never left holding production busting. Without this, a later `develop`/`start-backend` — whose `copyTree` is mtime-incremental and won't overwrite the newer stamped files — would silently run dev with production busting (a fixed `?ver` pinning stale code, plus the `?now` double load).
+- A **byte-stable inline kernel** in `index.html` keeps `index.html` itself uncached via the `?now` redirect, reads the version from the meta, exposes **`window.cacheBust(url)`** (appends `?ver=<version>`), and loads `kiss/bootstrap.js` busted.
+- **`bootstrap.js`** loads everything else through `bust()`: stylesheets, third-party libs (AG-Grid/CKEditor), `SystemInfo.js`, and all framework + application JS. `getScript`/`getScripts` and `Utils.getHTML` (screens) are busted; `Utils.bustHtmlResources` rewrites relative `<img src>` in loaded HTML *before* insertion (so the un-busted URL is never fetched).
+- **Why it's rock-solid:** the version sits in always-fresh `index.html` and the kernel is byte-stable, so a stale cached `index.html` self-heals — its identical kernel redirects to a fresh copy and re-reads the fresh version. No cacheable file in the chain can pin a stale version.
+- `bootstrap.js` mirrors the meta values onto `SystemInfo.softwareVersion` / `SystemInfo.controlCache` after loading `SystemInfo.js`, so existing references keep working.
+- **Not covered:** `background-image:url()` inside CSS (the browser resolves those static URLs) — those refresh when their stylesheet is re-fetched; and `DOMUtils.fetchHTML` (a generic `$.get` replacement) is outside the screen-loading path. Note that version-busting is global, so every release re-downloads even unchanged third-party libs.
 
 ## Model Context Protocol (MCP)
 
@@ -696,6 +808,7 @@ The file `Kiss/src/main/frontend/kiss/component/components.js` serves as the JSD
 The framework provides custom HTML components that should be used:
 - `<text-input>` - Text input field
 - `<drop-down>` - Dropdown select
+- `<combo-box>` - Editable dropdown (Windows-style combobox; pick from the list or type free text)
 - `<push-button>` - Button element
 - `<popup>` - Modal dialog
 - `<popup-title>` - Popup header
@@ -1099,60 +1212,35 @@ Utils.makeDraggable(
 - Calls `header.releasePointerCapture(e.pointerId)` in `endDrag` to cleanly release capture
 - Guards `isPrimary` so multi-touch sequences (second finger down) do not start a second drag
 
-## Front-End Bootstrap and Script Loading
+## Script Loading Order
 
-`index.html` is a minimal, byte-stable bootstrap. The cache-busting values live in
-`<meta name="kiss-version">` / `<meta name="kiss-cache-control">`; the one inline
-script (the "kernel") keeps index.html perpetually fresh via a `?now` redirect,
-defines `window.cacheBust()`, and loads `kiss/bootstrap.js` version-busted. The
-kernel's sha256 CSP hash is pinned in `SecurityHeadersFilter`
-(`org.kissweb.restServer`), so the kernel must remain **byte-for-byte unchanged** —
-all per-deploy values belong in the meta tags (or `SystemInfo.js`), never in the
-kernel. `./bld war` stamps the staged copies via `stampVersion()` (fresh UUID
-version, releaseDate into `SystemInfo.js`, cache-control on) and restores them after
-the WAR is captured; the source files keep their `EDIT` placeholders.
+The boot chain is: the inline **kernel** in `index.html` → `kiss/bootstrap.js` → `loadUtils()`. The kernel only ensures freshness and loads `bootstrap.js` (see [Cache Busting](#cache-busting-force-refresh-every-file-on-upgrade)); `bootstrap.js` does the actual ordered loading and defines the global loaders:
+- `getScript(url)` - Loads a single script file (version-busted; returns a Promise)
+- `getScripts(urls)` - Loads multiple scripts **in parallel** via `Promise.all()`
 
-`kiss/bootstrap.js` then loads everything in the correct order: stylesheets
-(normalize, `kiss/Utils.css`, ag-grid), vendor libs (ag-grid, ckeditor),
-`SystemInfo.js` (per-deploy config; the meta values are mirrored onto
-`SystemInfo.softwareVersion` / `.controlCache` so existing references keep working),
-`kiss/DOMUtils.js` (before Utils.js — a hard requirement), `kiss/AppState.js`
-(+`AppState.init()`), the framework libs (Utils, Date/Time/Number utils, Server,
-Router, AGGrid, Editor, MutableString), and finally the application-owned
-`routes.js` and `index.js`. Applications no longer write loader code in index.html;
-application-specific libraries and stylesheets are loaded from `index.js` using the
-bootstrap's global `getScript` / `getScripts` / `addStylesheet` (all version-busted
-through `window.cacheBust`).
+### Correct Loading Pattern (`loadUtils` in `bootstrap.js`)
 
-**AppState** (`kiss/AppState.js`) is the front-end state store backing the session
-token (`_uuid`) and `Utils.saveData`/`getData`. Storage is selected by
-`SystemInfo.stateStore`: `'session'` (per-tab sessionStorage — default), `'local'`,
-or `'memory'`. Sessions therefore survive a reload; `Server.verifyServerInstance()`
-(call it in `index.js` before `Router.start()`) drops the persisted session when the
-backend has restarted (`_BootId` mismatch). AppState is **required** by the current
-`Server.js`; Router is optional (`Server.js` guards it with `typeof Router`).
+```javascript
+async function loadUtils() {
+    addStylesheet("normalize.css"); ...                 // stylesheets (busted)
+    await getScripts(["lib/ag-grid-...js", "lib/ckeditor.js"]); // libs BEFORE AGGrid.js/Editor.js
+    await getScript("SystemInfo.js");                   // config (needed by AppState.init)
+    SystemInfo.softwareVersion = window.KissVersion;    // mirror meta values for back-compat
+    SystemInfo.controlCache    = window.KissCacheOn;
+    await getScript("kiss/DOMUtils.js");                // DOMUtils BEFORE Utils.js
+    await getScript("kiss/AppState.js");                // AppState BEFORE Server.js uses it
+    AppState.init();
+    await getScripts(["kiss/Utils.js", ..., "kiss/Server.js", "kiss/Router.js", "kiss/AGGrid.js", "kiss/Editor.js", ...]);
+    await getScript("routes.js");                       // routes BEFORE index.js calls Router.start()
+    getScript("index.js");
+}
+```
 
-## Hash Routing (kiss/Router.js)
-
-`Router` maps URL hashes (`#/path`) onto Kiss's two navigation levels: full-body
-screens (shells, login) and sub-screens loaded into a region (`tag`) of their shell.
-Routes are declared in application-owned `routes.js`:
-`Router.add(path, {page, tag, shell, focus, auth})` — `page` may be a function
-(device-aware screens); `auth` defaults to true, and unauthenticated users are
-redirected to `/login` with a `?return=` deep link (`Router.returnTarget()` gives
-the post-login destination). `Router.setScreenRoot('screens', {shell, tag})` enables
-file-based fallback: paths matching no route load as screens under the root by
-convention. Path parameters (`:name`) reach the screen via the `loadPage` `argv`
-mechanism and `Router.params()`.
-
-Navigation API: `Router.go(path[, tag])` (pushes history), `Router.replace(path)`
-(no Back entry — use after login or for bad-deep-link redirects),
-`Router.gotoLogin(captureReturn)` (used by `Server.js` on session expiry). Screens
-navigate exclusively with `Router.go` — `Utils.loadPage` cleans up internally
-(`Utils.cleanup()`) and is called by the Router; manual `cleanup()` +
-`loadPage(...)` navigation is the pre-Router pattern. The browser Back/Forward
-buttons become in-app navigation, so do **not** combine the Router with
-`DOMUtils.preventNavigation` (they fight over history).
+**Ordering constraints that matter:**
+- `getScripts()` loads in parallel, not sequentially — anything with a load-time dependency must be in an earlier `await`.
+- **DOMUtils before Utils.js** — Utils.js checks for the DOMUtils object at load time; otherwise "DOMUtils object not found".
+- **Third-party libs before `AGGrid.js`/`Editor.js`** (the kiss wrappers reference the lib globals).
+- **`SystemInfo.js` before `AppState.init()`** (reads `SystemInfo.stateStore`); **`AppState.js` before `Server.js`** (the `uuid` getter); **`routes.js` before `index.js`** (`Router.start()`).
 
 ## Login Form Structure
 
@@ -1295,10 +1383,10 @@ accepts any credentials).
 
 Fix: always give empty config keys an explicit empty-quoted value:
 ```ini
-SvnServicePassword = ""    # correct
-# SvnServicePassword =     # WRONG: parses to null -> Hashtable NPE
+ServicePassword = ""    # correct
+# ServicePassword =     # WRONG: parses to null -> Hashtable NPE
 ```
 
 ---
 
-*Last Updated: 2026-07-03*
+*Last Updated: 2026-07-09*

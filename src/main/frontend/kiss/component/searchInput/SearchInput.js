@@ -65,6 +65,11 @@
         return parseFloat(raw) || fallback;
     }
 
+    function cssString(name, fallback) {
+        const raw = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return raw || fallback;
+    }
+
     function prefersReducedMotion() {
         return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     }
@@ -244,6 +249,7 @@
             const glowPeakAt = clamp(cssNumber('--glow-peak-at', 0.15), 0.01, 0.99);
             const glowOpacity = cssNumber('--glow-opacity', 0.85);
             const glowSpread = cssNumber('--glow-spread', 1.5);
+            const glowColor = cssString('--glow-color', '100, 116, 139');
             const rects = wordRects(previousValue);
             const start = performance.now();
 
@@ -275,8 +281,8 @@
                         const ry = Math.max(10, rect.h * 1.65);
                         const a = Math.max(0, glowA * (1 - i * 0.025));
                         return 'radial-gradient(ellipse ' + rx.toFixed(1) + 'px ' + ry.toFixed(1) +
-                            'px at ' + rect.x.toFixed(1) + 'px ' + y.toFixed(1) + 'px, rgba(68, 90, 168, ' +
-                            a.toFixed(3) + ') 0%, rgba(68, 90, 168, 0) 72%)';
+                            'px at ' + rect.x.toFixed(1) + 'px ' + y.toFixed(1) + 'px, rgba(' + glowColor + ', ' +
+                            a.toFixed(3) + ') 0%, rgba(' + glowColor + ', 0) 72%)';
                     });
                     glow.style.background = layers.join(',');
                 } else {

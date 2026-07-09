@@ -246,6 +246,8 @@
     --copper: #445aa8;
     --copper-deep: #2f3d78;
     --copper-soft: #dbe1f4;
+    /* RGB triple of --copper, for the framework search-input clear glow (kiss --glow-color). */
+    --glow-color: 68, 90, 168;
     --teal: #1f5d57;
     --teal-soft: #c5dcd8;
     --plum: #6b2c4e;

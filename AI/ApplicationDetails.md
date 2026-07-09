@@ -14,6 +14,27 @@ A self-hosted, GitHub-like web service built on the Kiss framework, but backed b
 See `Plan.md` (repo root) for the original design. `AI/KnowledgeBase.md` is the Kiss
 framework reference — read it before changing framework code.
 
+## Relationship to the Kiss framework (upstream sync)
+- The canonical upstream is Blake's local Kiss checkout. SvnHub's shared framework
+  tree — `src/main/frontend/kiss/`, `src/main/core/org/kissweb/`, `bld`, and
+  `AI/KnowledgeBase.md` — is kept **byte-identical** to that upstream. The sole
+  intentional code exception is `Tasks.java`, whose `libs()` adds the SVNKit
+  dependency block. `AI/KnowledgeBase.md` must be identical in both repos and hold
+  only generic Kiss-framework material; anything SvnHub-specific goes in this file.
+- Generic improvements that arrive through SvnHub (including contributor PRs) are
+  **upstreamed** to canonical Kiss, not kept only here. Application-specific values
+  must be parameterized out of the framework and supplied from the app layer.
+- **Re-audit every contributor PR for framework drift** before it lands: `diff -rq`
+  the two `kiss/` trees, confirm no app name or brand value leaked into `kiss/`, and
+  upstream any legitimately-generic additions. (Commit `26751a6` slipped 9 generic
+  framework edits plus one hardcoded brand color into `kiss/`; both were reconciled
+  afterward.)
+- **Brand values ride framework variables:** the framework exposes neutral-defaulted
+  hooks and SvnHub supplies its specifics from `svnhub-theme.css`. Example: the Kiss
+  search-input clear-glow reads a `--glow-color` CSS variable (neutral default in
+  `kiss/Utils.css`); SvnHub sets `--glow-color: 68, 90, 168` (its `--copper` accent)
+  in `svnhub-theme.css`.
+
 ## Locked-in architecture decisions
 - **Full management**: SvnHub creates repositories and manages SVN auth (writes svnserve
   `passwd`/`authz`/`svnserve.conf`) through the web UI.

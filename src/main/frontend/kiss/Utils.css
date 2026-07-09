@@ -240,6 +240,7 @@ div.vert-input label:after { content: ":"; }
     --glow-peak-at: 0.15;
     --glow-opacity: 0;
     --glow-spread: 1.5;
+    --glow-color: 100, 116, 139;
 }
 
 .kiss-toast {
