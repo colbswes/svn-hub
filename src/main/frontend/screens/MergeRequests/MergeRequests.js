@@ -14,6 +14,8 @@
         return;
     }
     let current = null;
+    const mrSlide = document.getElementById('mr-slide');
+    SvnHubUI.initPageSlide(mrSlide, 'list');
 
     function fmtDate(ms) {
         try {
@@ -60,13 +62,8 @@
     // ---- views: list, in-place detail (full-width diff), in-place composer.
     // Mirrored in a ?mr= query param (number or "new") pushed to browser history,
     // exactly like the Issues screen — deep-linkable and Back/Forward friendly.
-    const VIEWS = {list: 'mr-view-list', detail: 'mr-view-detail', compose: 'mr-view-new'};
     function showView(name) {
-        Object.keys(VIEWS).forEach((k) => {
-            const el = document.getElementById(VIEWS[k]);
-            if (el)
-                el.style.display = k === name ? '' : 'none';
-        });
+        SvnHubUI.setPageSlidePage(mrSlide, name === 'compose' ? 'new' : name);
     }
 
     function mrUrl(val) {
@@ -75,6 +72,8 @@
             url.searchParams.delete('mr');
         else
             url.searchParams.set('mr', val);
+        url.searchParams.delete('diffFile');
+        url.searchParams.delete('diffRows');
         return url.pathname + url.search + url.hash;
     }
     function writeMrHistory(val, mode = 'push') {
@@ -331,6 +330,7 @@
             SvnHubUI.renderUnifiedDiff(diffHost, dp.diff);
         else
             diffHost.innerHTML = '<p class="muted" style="margin:0; padding:10px 0;">Diff preview unavailable.</p>';
+        SvnHubUI.refreshPageSlide(mrSlide);
     }
     $$('md-back').onclick(() => showList('replace'));
 

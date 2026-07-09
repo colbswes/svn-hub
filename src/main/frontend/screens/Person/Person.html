@@ -8,6 +8,35 @@
         <p class="muted" id="person-error-body">This person could not be found, or the profile failed to load.</p>
     </div>
 
+    <div id="person-loading" class="person-loading" role="status" aria-label="Loading profile">
+        <div class="person-loading-header">
+            <span class="person-loading-avatar skel"></span>
+            <span class="person-loading-copy">
+                <span class="skel person-loading-title"></span>
+                <span class="skel person-loading-handle"></span>
+                <span class="skel person-loading-small"></span>
+            </span>
+            <span class="person-loading-stats">
+                <span class="skel"></span>
+                <span class="skel"></span>
+                <span class="skel"></span>
+            </span>
+        </div>
+        <div class="person-loading-layout">
+            <div class="person-loading-rail">
+                <span class="skel"></span>
+                <span class="skel"></span>
+                <span class="skel"></span>
+            </div>
+            <div class="person-loading-main">
+                <span class="skel"></span>
+                <span class="skel"></span>
+                <span class="skel"></span>
+                <span class="skel"></span>
+            </div>
+        </div>
+    </div>
+
     <div id="person-body" class="person-body" hidden>
         <header class="profile-header person-profile-header">
             <div class="profile-id">
@@ -16,9 +45,9 @@
                     <div class="person-name-row">
                         <h1 id="person-name">Person</h1>
                         <button type="button" id="person-name-edit" class="person-name-edit" hidden aria-label="Edit name" title="Edit name">
-                            <span class="person-name-edit-icons" aria-hidden="true">
-                                <svg class="person-name-edit-icon person-name-edit-pencil" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5l2.35-.48 7.08-7.08a1.35 1.35 0 0 0 0-1.91l-.46-.46a1.35 1.35 0 0 0-1.91 0L2.98 9.65 2.5 12a.42.42 0 0 0 .5.5Z"/><path d="m9.25 3.38 3.37 3.37"/></svg>
-                                <svg class="person-name-edit-icon person-name-edit-x" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4.5 4.5 7 7"/><path d="m11.5 4.5-7 7"/></svg>
+                            <span class="person-name-edit-icons t-icon-swap" data-state="a" aria-hidden="true">
+                                <svg class="person-name-edit-icon t-icon" data-icon="a" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5l2.35-.48 7.08-7.08a1.35 1.35 0 0 0 0-1.91l-.46-.46a1.35 1.35 0 0 0-1.91 0L2.98 9.65 2.5 12a.42.42 0 0 0 .5.5Z"/><path d="m9.25 3.38 3.37 3.37"/></svg>
+                                <svg class="person-name-edit-icon t-icon" data-icon="b" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4.5 4.5 7 7"/><path d="m11.5 4.5-7 7"/></svg>
                             </span>
                         </button>
                         <button type="button" id="person-name-save" class="person-name-save" hidden aria-label="Save name" title="Save name">
@@ -107,7 +136,7 @@
                         <span class="ins-section-line" aria-hidden="true"></span>
                     </button>
                     <div id="person-activity-body" class="ins-section-body person-expand-body">
-                        <div id="person-activity" class="revision-spine person-activity-list"></div>
+                        <div id="person-activity" class="person-activity-list"></div>
                     </div>
                 </section>
             </main>

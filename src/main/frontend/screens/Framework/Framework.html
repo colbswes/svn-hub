@@ -6,38 +6,42 @@
                 <span class="wordmark">svn<span class="dot"></span>hub</span>
             </div>
 
-            <nav class="nav-links" id="primary-nav" aria-label="Primary">
-                <span class="nav-pill nav-pill-active" aria-hidden="true"></span>
-                <push-button id="repositories">Home</push-button>
-                <push-button id="discover">Explore</push-button>
-                <push-button id="insights">Insights</push-button>
-                <push-button id="users" style="display:none;">Admin</push-button>
-            </nav>
+            <button type="button" class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="nav-menu" title="Menu">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
 
-            <div class="nav-search" id="nav-search">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                <input type="text" id="nav-q" class="nav-search-input" placeholder="Jump to repository or person..." autocomplete="off">
-                <button type="button" id="nav-q-clear" class="search-clear-icon" aria-label="Clear search" title="Clear search">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-                </button>
-                <div class="nav-search-results" id="nav-results"></div>
-            </div>
+            <div class="nav-menu" id="nav-menu">
+                <nav class="nav-links" id="primary-nav" aria-label="Primary">
+                    <span class="nav-pill nav-pill-active" aria-hidden="true"></span>
+                    <push-button id="repositories">Home</push-button>
+                    <push-button id="discover">Explore</push-button>
+                    <push-button id="insights">Insights</push-button>
+                    <push-button id="users" style="display:none;">Admin</push-button>
+                </nav>
 
-            <div class="account-box">
-                <push-button id="help" class="nav-help">Help</push-button>
-                <div class="acct-menu" id="acct-menu">
-                    <button type="button" class="acct-chip" id="acct-chip" aria-label="Your account" aria-haspopup="true" aria-expanded="false">
-                        <span class="avatar" id="acct-avatar">SV</span>
-                        <span class="mono acct-chip-handle">@<text-label id="acct-name"></text-label></span>
-                        <svg class="acct-caret" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                    <div class="acct-dropdown" id="acct-dropdown" role="menu">
-                        <button type="button" class="acct-menu-item" id="menu-view-profile" role="menuitem">View my profile</button>
-                        <button type="button" class="acct-menu-item" id="menu-change-pw" role="menuitem">Change password</button>
-                        <button type="button" class="acct-menu-item danger" id="menu-logout" role="menuitem">Logout</button>
-                    </div>
+                <div class="nav-search hidden" id="nav-search">
+                    <search-input id="nav-q" class="nav-search-input" placeholder="Jump to repository or person..." clear-label="Clear search"></search-input>
+                    <div class="nav-search-results" id="nav-results"></div>
                 </div>
-                <push-button id="signin" class="btn-accent btn-sm">Sign in</push-button>
+
+                <div class="account-box">
+                    <push-button id="help" class="nav-help">Help</push-button>
+                    <div class="acct-menu" id="acct-menu">
+                        <button type="button" class="acct-chip" id="acct-chip" aria-label="Your account" aria-haspopup="true" aria-expanded="false">
+                            <span class="avatar" id="acct-avatar">SV</span>
+                            <span class="mono acct-chip-handle">@<text-label id="acct-name"></text-label></span>
+                            <svg class="acct-caret" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                        <div class="acct-dropdown" id="acct-dropdown" role="menu">
+                            <button type="button" class="acct-menu-item" id="menu-view-profile" role="menuitem">View my profile</button>
+                            <button type="button" class="acct-menu-item" id="menu-change-pw" role="menuitem">Change password</button>
+                            <button type="button" class="acct-menu-item danger" id="menu-logout" role="menuitem">Logout</button>
+                        </div>
+                    </div>
+                    <push-button id="signin" class="btn-accent btn-sm">Sign in</push-button>
+                </div>
             </div>
         </div>
     </header>

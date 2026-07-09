@@ -1,4 +1,4 @@
-/* global $$, Utils, Server, Router */
+/* global $$, Utils, Server, Router, SvnHubUI */
 
 'use strict';
 
@@ -12,8 +12,47 @@
     const guest = !Server.uuid;
     Utils.saveData('guest', guest);
     const isAdmin = Utils.getData('isAdmin') === true;
+    const appNav = document.querySelector('.app-nav');
     const primaryNav = document.getElementById('primary-nav');
+    const navMenu = document.getElementById('nav-menu');
+    const mobileNavToggle = document.getElementById('mobile-nav-toggle');
+    const mobileNavMq = window.matchMedia('(max-width: 760px)');
     let activeNavId = null;
+    let navPillReady = false;
+    let navPillReadyQueued = false;
+
+    function isMobileNav() {
+        return mobileNavMq.matches;
+    }
+
+    function syncMobileNavAccessibility(open) {
+        if (!navMenu)
+            return;
+        const hidden = isMobileNav() && !open;
+        navMenu.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+        if ('inert' in navMenu)
+            navMenu.inert = hidden;
+    }
+
+    function setMobileNavOpen(open) {
+        if (!appNav || !mobileNavToggle)
+            return;
+        const shouldOpen = !!open && isMobileNav();
+        appNav.classList.toggle('menu-open', shouldOpen);
+        mobileNavToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        mobileNavToggle.setAttribute('aria-label', shouldOpen ? 'Close navigation' : 'Open navigation');
+        mobileNavToggle.title = shouldOpen ? 'Close menu' : 'Menu';
+        syncMobileNavAccessibility(shouldOpen);
+        window.requestAnimationFrame(updateActiveNavPill);
+    }
+
+    function syncMobileNavMode() {
+        if (!isMobileNav()) {
+            setMobileNavOpen(false);
+            return;
+        }
+        syncMobileNavAccessibility(appNav && appNav.classList.contains('menu-open'));
+    }
 
     function isUsableNavButton(el) {
         return el && primaryNav && primaryNav.contains(el) && el.offsetParent !== null && !el.disabled;
@@ -37,8 +76,20 @@
         if (!primaryNav)
             return;
         primaryNav.classList.toggle('nav-has-active', !!ok);
-        if (ok)
+        if (!ok)
+            return;
+        if (navPillReady) {
             primaryNav.classList.add('nav-ready');
+            return;
+        }
+        if (navPillReadyQueued)
+            return;
+        navPillReadyQueued = true;
+        window.requestAnimationFrame(() => {
+            navPillReady = true;
+            navPillReadyQueued = false;
+            primaryNav.classList.add('nav-ready');
+        });
     }
 
     function setActive(id, page) {
@@ -59,9 +110,20 @@
         const navSearch = document.getElementById('nav-search');
         if (navSearch)
             navSearch.classList.toggle('hidden', page === 'screens/Discover/Discover');
+        setMobileNavOpen(false);
     }
 
     Utils.setAppNavActive = setActive;
+
+    if (mobileNavToggle) {
+        mobileNavToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            setMobileNavOpen(!appNav.classList.contains('menu-open'));
+        });
+        syncMobileNavMode();
+        if (mobileNavMq.addEventListener)
+            mobileNavMq.addEventListener('change', syncMobileNavMode);
+    }
 
     //  Map a screen page path to its Router route (declared in routes.js).  Screen
     //  data is passed via Utils.saveData before navigating (screens read it with
@@ -87,6 +149,7 @@
     }
 
     function goSignIn() {
+        setMobileNavOpen(false);
         Server.clearSession();
         Router.go('/login');
     }
@@ -129,6 +192,7 @@
 
     if (primaryNav) {
         window.addEventListener('resize', function () {
+            syncMobileNavMode();
             updateActiveNavPill();
         });
     }
@@ -169,12 +233,16 @@
         toggleAcctMenu();
     });
     document.addEventListener('click', function (e) {
+        if (appNav && !e.target.closest('.app-nav'))
+            setMobileNavOpen(false);
         if (!e.target.closest('#acct-menu'))
             closeAcctMenu();
     });
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape')
+        if (e.key === 'Escape') {
+            setMobileNavOpen(false);
             closeAcctMenu();
+        }
     });
 
     document.getElementById('menu-logout').addEventListener('click', function () {
@@ -290,12 +358,11 @@
     });
 
     // ---- global topbar search ----
-    const navQ = document.getElementById('nav-q');
-    const navQClear = document.getElementById('nav-q-clear');
+    const navSearchCtl = $$('nav-q');
+    const navQ = document.getElementById('nav-q-input');
     const navResults = document.getElementById('nav-results');
     const navSearch = document.getElementById('nav-search');
-    let navSearchTimer = null;
-    let navSearchToken = 0;
+    let navSearchRunner = null;
     let navDefaultRows = null;
     let navDefaultPromise = null;
 
@@ -309,18 +376,18 @@
         navResults.innerHTML = '';
     }
     function syncNavClear() {
-        navSearch.classList.toggle('has-value', !!navQ.value.trim());
+        navSearch.classList.toggle('has-value', !!navSearchCtl.getValue().trim());
     }
-    function clearNavSearch() {
-        clearTimeout(navSearchTimer);
-        navSearchToken++;
-        navQ.value = '';
+    function clearNavSearch(fromControl = false) {
+        navSearchRunner.cancel();
+        if (!fromControl)
+            navSearchCtl.clear();
         syncNavClear();
         hideNavResults();
     }
     function openRepoFromSearch(id, key, name) {
         hideNavResults();
-        navQ.value = '';
+        navSearchCtl.clear();
         syncNavClear();
         Utils.saveData('repoId', Number(id));
         Utils.saveData('repoKey', key);
@@ -335,7 +402,7 @@
     }
     function openPersonFromSearch(handle) {
         hideNavResults();
-        navQ.value = '';
+        navSearchCtl.clear();
         syncNavClear();
         Utils.saveData('personHandle', handle);
         Utils.saveData('personReturnTo', {
@@ -398,9 +465,6 @@
     function defaultNavLabel() {
         return guest ? 'Public repositories' : 'Your repositories';
     }
-    function defaultNavEmptyText() {
-        return guest ? 'No public repositories yet.' : 'You do not own any repositories yet.';
-    }
     function loadDefaultNavRows() {
         if (!navDefaultPromise) {
             navDefaultPromise = (guest
@@ -417,25 +481,32 @@
         return navDefaultPromise;
     }
     async function showDefaultNavResults() {
-        const q = navQ.value.trim();
+        const q = navSearchCtl.getValue().trim();
         if (q) {
             runNavSearch();
             return;
         }
         if (navDefaultRows) {
-            renderNavGroups([{label: defaultNavLabel(), rows: navDefaultRows, render: navRepoRow}], defaultNavEmptyText());
+            if (navDefaultRows.length)
+                renderNavGroups([{label: defaultNavLabel(), rows: navDefaultRows, render: navRepoRow}], '');
+            else
+                hideNavResults();
             return;
         }
-        const token = ++navSearchToken;
+        const token = navSearchRunner.cancel();
         hideNavResults();
         const rows = await loadDefaultNavRows();
-        if (token !== navSearchToken || navQ.value.trim() || document.activeElement !== navQ)
+        if (!navSearchRunner.isCurrent(token) || navSearchCtl.getValue().trim() || document.activeElement !== navQ)
             return;
-        renderNavGroups([{label: defaultNavLabel(), rows: rows, render: navRepoRow}], defaultNavEmptyText());
+        if (rows.length)
+            renderNavGroups([{label: defaultNavLabel(), rows: rows, render: navRepoRow}], '');
+        else
+            hideNavResults();
     }
-    async function runNavSearch() {
-        const token = ++navSearchToken;
-        const q = navQ.value.trim();
+    async function runNavSearch(token) {
+        if (token == null)
+            token = navSearchRunner.cancel();
+        const q = navSearchCtl.getValue().trim();
         if (!q) {
             showDefaultNavResults();
             return;
@@ -445,7 +516,7 @@
             Server.callQuiet(searchRepoService(), searchRepoMethod(), {query: q, page: 0, pageSize: 6}),
             Server.callQuiet('services/DiscoverService', 'searchUsers', {query: q, page: 0, pageSize: 6})
         ]);
-        if (token !== navSearchToken || navQ.value.trim() !== q || document.activeElement !== navQ)
+        if (!navSearchRunner.isCurrent(token) || navSearchCtl.getValue().trim() !== q || document.activeElement !== navQ)
             return;
         renderNavGroups([
             {
@@ -462,37 +533,34 @@
             }
         ], 'No results match "' + q + '".');
     }
-    navQ.addEventListener('input', function () {
+    navSearchRunner = SvnHubUI.createDebouncedRunner(runNavSearch, 200);
+    navSearchCtl.onInput(function () {
         syncNavClear();
-        clearTimeout(navSearchTimer);
-        if (!navQ.value.trim()) {
+        if (!navSearchCtl.getValue().trim()) {
             showDefaultNavResults();
             return;
         }
-        navSearchTimer = setTimeout(runNavSearch, 200);
+        navSearchRunner.schedule();
     });
-    navQClear.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-    });
-    navQClear.addEventListener('click', clearNavSearch);
+    navSearchCtl.onClear(() => clearNavSearch(true));
     navQ.addEventListener('focus', showDefaultNavResults);
     navQ.addEventListener('click', showDefaultNavResults);
-    navQ.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const q = navQ.value.trim();
-            if (!q) {
-                hideNavResults();
-                return;
-            }
-            Utils.saveData('discoverQuery', q);
-            Utils.saveData('discoverFilter', 'all');
-            navQ.value = '';
-            syncNavClear();
-            navQ.blur();
+    navSearchCtl.onSearch(function () {
+        const q = navSearchCtl.getValue().trim();
+        if (!q) {
             hideNavResults();
-            route('discover', 'screens/Discover/Discover');
-        } else if (e.key === 'Escape') {
+            return;
+        }
+        Utils.saveData('discoverQuery', q);
+        Utils.saveData('discoverFilter', 'all');
+        navSearchCtl.clear();
+        syncNavClear();
+        navQ.blur();
+        hideNavResults();
+        route('discover', 'screens/Discover/Discover');
+    });
+    navQ.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
             hideNavResults();
             navQ.blur();
         }
@@ -511,7 +579,7 @@
         }
     });
     navQ.addEventListener('blur', function () {
-        navSearchToken++;
+        navSearchRunner.cancel();
         setTimeout(hideNavResults, 150);
     });
     syncNavClear();

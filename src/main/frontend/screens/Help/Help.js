@@ -5,6 +5,8 @@
 
 (async function () {
 
+    const pendingTopic = Utils.getAndEraseData('helpTopic');
+
     // Static reference content for topics that don't have a dedicated screen.
     // Each entry: title + HTML body shown in the themed help popup.
     const TOPICS = {
@@ -95,5 +97,8 @@
 
     if (Utils.setAppNavActive)
         Utils.setAppNavActive('help');
+
+    if (pendingTopic && TOPICS[pendingTopic])
+        window.setTimeout(() => openTopic(pendingTopic), 0);
 
 })();

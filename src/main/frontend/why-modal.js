@@ -6,12 +6,13 @@
 
     let modal = null;
     let closeTimer = null;
+    let openFrame = null;
     let lastFocus = null;
     let documentListenerBound = false;
 
     const modalHtml = `
 <div class="why-modal-overlay" id="why-service-modal" hidden>
-    <div class="why-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="why-modal-title">
+    <div class="why-modal-dialog t-modal" role="dialog" aria-modal="true" aria-labelledby="why-modal-title">
         <header class="why-modal-header">
             <div>
                 <div class="eyebrow"><span class="tick">▍</span> Service explanation</div>
@@ -93,6 +94,19 @@
     </div>
 </div>`;
 
+    function modalCloseDuration() {
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+            return 0;
+        const raw = window.getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur').trim();
+        if (!raw)
+            return 150;
+        if (raw.endsWith('ms'))
+            return parseFloat(raw) || 150;
+        if (raw.endsWith('s'))
+            return (parseFloat(raw) || 0.15) * 1000;
+        return parseFloat(raw) || 150;
+    }
+
     function ensureModal() {
         if (modal && document.body.contains(modal))
             return modal;
@@ -124,10 +138,20 @@
             window.clearTimeout(closeTimer);
             closeTimer = null;
         }
+        if (openFrame) {
+            window.cancelAnimationFrame(openFrame);
+            openFrame = null;
+        }
         el.hidden = false;
+        const dialog = el.querySelector('.why-modal-dialog');
+        if (dialog)
+            dialog.classList.remove('is-open', 'is-closing');
         document.body.classList.add('why-modal-open');
-        window.requestAnimationFrame(function () {
+        openFrame = window.requestAnimationFrame(function () {
+            openFrame = null;
             el.classList.add('open');
+            if (dialog)
+                dialog.classList.add('is-open');
             const body = el.querySelector('.why-modal-body');
             if (body)
                 body.scrollTop = 0;
@@ -137,14 +161,27 @@
 
     function close() {
         const el = ensureModal();
+        if (closeTimer)
+            return;
+        const dialog = el.querySelector('.why-modal-dialog');
+        if (openFrame) {
+            window.cancelAnimationFrame(openFrame);
+            openFrame = null;
+        }
         el.classList.remove('open');
+        if (dialog) {
+            dialog.classList.remove('is-open');
+            dialog.classList.add('is-closing');
+        }
         document.body.classList.remove('why-modal-open');
         closeTimer = window.setTimeout(function () {
+            if (dialog)
+                dialog.classList.remove('is-closing');
             el.hidden = true;
             closeTimer = null;
             if (lastFocus && lastFocus.focus)
                 lastFocus.focus();
-        }, 180);
+        }, modalCloseDuration());
     }
 
     window.SvnHubWhyModal = {

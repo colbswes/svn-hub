@@ -11,13 +11,22 @@
             </div>
             <p class="repo-subhead" id="repo-subhead"></p>
         </div>
-        <div class="repo-header-actions" id="repo-header-actions" hidden>
-            <push-button id="repo-edit-btn" class="btn-sm">Edit</push-button>
-            <push-button id="repo-access-btn" class="btn-sm">Access</push-button>
-        </div>
+        <menu-button id="repo-settings-menu" class="repo-settings-menu" align="end" button-class="repo-settings-trigger" label="Repository settings" hidden>
+            <menu-trigger>
+                <span class="repo-settings-icon svnhub-icon icon-settings" aria-hidden="true"></span>
+                <span class="sr-only">Repository settings</span>
+            </menu-trigger>
+            <menu-item value="edit">Edit details</menu-item>
+            <menu-item value="access">Manage access</menu-item>
+            <menu-separator></menu-separator>
+            <menu-item value="delete" danger>Delete</menu-item>
+        </menu-button>
         <button type="button" id="checkout-btn" class="checkout-box repo-checkout-copy" aria-label="Copy SVN checkout command">
             <span class="protocol">SVN</span>
             <span class="url mono" id="repo-checkout-display"></span>
+            <span class="checkout-copy-icon" aria-hidden="true">
+                <span class="svnhub-icon icon-copy"></span>
+            </span>
             <span class="checkout-feedback" id="checkout-feedback" aria-live="polite">
                 <span class="checkout-check">✓</span>
                 <span id="checkout-feedback-text">Copied</span>
@@ -25,47 +34,62 @@
         </button>
     </header>
 
-    <section class="card card-pad repo-overview">
-        <dl class="fact-list fact-grid repo-overview-facts">
-            <div class="fact"><dt>HEAD</dt><dd class="mono" id="fact-head"><span class="sk"></span></dd></div>
-            <div class="fact"><dt>Branches</dt><dd id="fact-branches"><span class="sk"></span></dd></div>
-            <div class="fact"><dt>Tags</dt><dd id="fact-tags"><span class="sk"></span></dd></div>
-            <div class="fact"><dt>Files</dt><dd id="fact-files"><span class="sk"></span></dd></div>
-            <div class="fact"><dt>Size</dt><dd id="fact-size"><span class="sk"></span></dd></div>
-            <div class="fact"><dt>Issues</dt><dd id="fact-issues"><span class="sk"></span></dd></div>
-            <div class="fact"><dt>Merge requests</dt><dd id="fact-mrs"><span class="sk"></span></dd></div>
-            <div class="fact"><dt>Created</dt><dd id="fact-created"><span class="sk"></span></dd></div>
-        </dl>
-    </section>
-
     <div class="repo-detail-layout">
-        <aside class="side-rail repo-rail">
-            <section class="card card-pad">
-                <div class="eyebrow">Sections</div>
-                <nav class="side-nav" style="margin-top:12px;" aria-label="Repository sections">
-                    <button type="button" class="side-nav-btn" id="go-files"><span class="side-nav-label">Files</span></button>
-                    <button type="button" class="side-nav-btn" id="go-readme"><span class="side-nav-label">README</span></button>
-                    <button type="button" class="side-nav-btn" id="go-history"><span class="side-nav-label">History</span></button>
-                    <button type="button" class="side-nav-btn" id="go-issues"><span class="side-nav-label">Issues</span><span class="side-nav-count" id="count-issues" hidden></span></button>
-                    <button type="button" class="side-nav-btn" id="go-mrs"><span class="side-nav-label">Merge Requests</span><span class="side-nav-count" id="count-mrs" hidden></span></button>
-                    <button type="button" class="side-nav-btn" id="go-insights"><span class="side-nav-label">Insights</span></button>
+        <aside class="side-rail repo-rail" id="repo-rail">
+            <div class="repo-rail-top">
+                <div class="repo-rail-title">Repository</div>
+                <button type="button" class="repo-rail-toggle" id="repo-rail-toggle" aria-label="Collapse repository rail" aria-expanded="true" data-tooltip="Collapse sidebar">
+                    <span class="svnhub-icon icon-panel-left" aria-hidden="true"></span>
+                </button>
+            </div>
+
+            <section class="repo-section-panel">
+                <div class="eyebrow repo-rail-eyebrow">Sections</div>
+                <nav class="side-nav repo-section-nav" aria-label="Repository sections">
+                    <button type="button" class="side-nav-btn" id="go-files" aria-label="Files">
+                        <span class="side-nav-icon svnhub-icon icon-folder" aria-hidden="true"></span>
+                        <span class="side-nav-label">Files</span>
+                    </button>
+                    <button type="button" class="side-nav-btn" id="go-readme" aria-label="README">
+                        <span class="side-nav-icon svnhub-icon icon-file-text" aria-hidden="true"></span>
+                        <span class="side-nav-label">README</span>
+                    </button>
+                    <button type="button" class="side-nav-btn" id="go-history" aria-label="History">
+                        <span class="side-nav-icon svnhub-icon icon-history" aria-hidden="true"></span>
+                        <span class="side-nav-label">History</span>
+                    </button>
+                    <button type="button" class="side-nav-btn" id="go-issues" aria-label="Issues">
+                        <span class="side-nav-icon svnhub-icon icon-circle-alert" aria-hidden="true"></span>
+                        <span class="side-nav-label">Issues</span><span class="side-nav-count" id="count-issues" hidden></span>
+                    </button>
+                    <button type="button" class="side-nav-btn" id="go-mrs" aria-label="Merge Requests">
+                        <span class="side-nav-icon svnhub-icon icon-git-pull-request" aria-hidden="true"></span>
+                        <span class="side-nav-label">Merge Requests</span><span class="side-nav-count" id="count-mrs" hidden></span>
+                    </button>
+                    <button type="button" class="side-nav-btn" id="go-insights" aria-label="Insights">
+                        <span class="side-nav-icon svnhub-icon icon-chart-column" aria-hidden="true"></span>
+                        <span class="side-nav-label">Insights</span>
+                    </button>
                 </nav>
             </section>
 
-            <section class="card card-pad repo-contributors-card">
-                <div class="section-title">
-                    <div>
-                        <h2>Top contributors</h2>
-                        <div class="muted">Who lands revisions here</div>
-                    </div>
-                </div>
-                <div id="about-contributors" class="contrib-list"></div>
+            <section class="repo-rail-panel repo-info-panel">
+                <div class="eyebrow repo-rail-eyebrow">Repository info</div>
+                <dl class="repo-info-list">
+                    <div class="repo-info-row"><dt>HEAD</dt><dd class="mono" id="fact-head"><span class="sk"></span></dd></div>
+                    <div class="repo-info-row"><dt>Branches</dt><dd id="fact-branches"><span class="sk"></span></dd></div>
+                    <div class="repo-info-row"><dt>Tags</dt><dd id="fact-tags"><span class="sk"></span></dd></div>
+                    <div class="repo-info-row"><dt>Files</dt><dd id="fact-files"><span class="sk"></span></dd></div>
+                    <div class="repo-info-row"><dt>Size</dt><dd id="fact-size"><span class="sk"></span></dd></div>
+                    <div class="repo-info-row"><dt>Created</dt><dd id="fact-created"><span class="sk"></span></dd></div>
+                </dl>
             </section>
         </aside>
 
-        <main style="min-width:0;">
-            <section class="card card-pad repo-view" id="view-history" style="display:none;">
-                <div id="rev-feed-wrap">
+        <main class="repo-main-workbench t-page-slide" id="repo-main-slide">
+            <section class="repo-view repo-workbench-panel t-page" id="view-history" data-page-id="history" style="display:none;">
+                <div class="t-page-slide repo-inner-slide" id="history-slide">
+                <div class="t-page" id="rev-feed-wrap" data-page-id="feed">
                     <div class="section-title" style="margin-top:0;">
                         <div>
                             <h2>Revision history</h2>
@@ -75,7 +99,7 @@
                     </div>
                     <div id="revision-feed" class="revision-spine"></div>
                 </div>
-                <div id="rev-viewer" style="display:none;">
+                <div class="t-page" id="rev-viewer" data-page-id="detail" style="display:none;">
                     <div class="file-viewer-toolbar rev-viewer-toolbar">
                         <push-button id="rev-back" class="btn-sm">&larr; History</push-button>
                         <div class="file-viewer-title">
@@ -87,19 +111,24 @@
                     <div class="rev-message" id="rev-message"></div>
                     <div id="rev-diff-host" class="rev-diff-host"></div>
                 </div>
+                </div>
             </section>
 
-            <section class="card card-pad repo-view repo-files-panel" id="view-files" style="display:none;">
+            <section class="repo-view repo-workbench-panel repo-files-panel t-page" id="view-files" data-page-id="files" style="display:none;">
                 <div class="browse-toolbar">
                     <nav class="crumbs" id="browse-crumb" aria-label="Current path"></nav>
-                    <div class="root-chips" role="group" aria-label="Jump to root">
+                    <div class="root-chips" id="root-chips" role="group" aria-label="Jump to root" hidden>
                         <button type="button" class="root-chip mono" id="root-trunk">trunk</button>
                         <button type="button" class="root-chip mono" id="root-branches">branches</button>
                         <button type="button" class="root-chip mono" id="root-tags">tags</button>
                     </div>
                 </div>
+                <div class="t-page-slide repo-inner-slide repo-files-slide" id="files-slide">
+                <div class="t-page" id="files-browse-page" data-page-id="browse">
                 <div id="browse-grid" class="browse-grid-host" style="width: 100%; margin-top: 12px;"></div>
-                <div id="file-viewer" class="file-viewer" style="display:none;">
+                <div id="browse-empty" class="repo-empty browse-empty" hidden></div>
+                </div>
+                <div id="file-viewer" class="file-viewer t-page" data-page-id="file" style="display:none;">
                     <div class="file-viewer-toolbar">
                         <push-button id="file-back" class="btn-sm file-back">&larr; Files</push-button>
                         <div class="file-viewer-title">
@@ -110,25 +139,26 @@
                         <push-button id="file-raw" class="btn-sm">View raw</push-button>
                     </div>
                     <div class="file-viewer-body" id="file-viewer-body">
-                        <pre class="file-viewer-code"><code id="file-content"></code></pre>
+                        <div class="file-viewer-code" id="file-lines"></div>
                     </div>
+                </div>
                 </div>
             </section>
 
-            <section class="card card-pad repo-view" id="view-readme" style="display:none;">
+            <section class="repo-view repo-workbench-panel t-page" id="view-readme" data-page-id="readme" style="display:none;">
                 <div class="section-title" style="margin-top:0;">
                     <h2>README</h2>
                 </div>
                 <div class="repo-render repo-readme-render"><text-label id="readme"></text-label></div>
             </section>
 
-            <section class="repo-view" id="view-embed" style="display:none;">
+            <section class="repo-view repo-workbench-panel t-page" id="view-embed" data-page-id="embed" style="display:none;">
                 <div id="repo-embed-host"></div>
             </section>
         </main>
     </div>
 
-    <popup id="repo-edit-popup" width="520px" height="640px">
+    <popup id="repo-edit-popup" width="500px" height="520px" draggable="false" close-button="true">
         <popup-title>Edit repository</popup-title>
         <popup-body>
             <div class="modal-pad">
@@ -171,11 +201,36 @@
         </popup-body>
     </popup>
 
-    <popup id="repo-access-popup" width="640px" height="660px">
-        <popup-title>
-            <text-label id="acc-title"></text-label>
-            <button type="button" class="popup-icon-close" id="acc-modal-close" aria-label="Close access modal">×</button>
-        </popup-title>
+    <popup id="repo-delete-popup" width="500px" height="360px" draggable="false" close-button="true">
+        <popup-title>Delete repository</popup-title>
+        <popup-body>
+            <div class="modal-pad repo-delete-modal" id="repo-delete-modal">
+                <div class="repo-delete-warning">
+                    <div class="repo-delete-warning-title">This cannot be undone.</div>
+                    <div class="repo-delete-warning-copy">
+                        Deleting <strong id="rd-name"></strong> permanently removes the repository,
+                        its issues, merge requests, cached commits, access grants, and on-disk SVN data.
+                    </div>
+                </div>
+                <div class="field" style="margin-top:18px;">
+                    <label for="rd-confirm">Type <span class="repo-delete-confirm-name" id="rd-confirm-name"></span> to confirm</label>
+                    <text-input id="rd-confirm" style="width: 100%" autocomplete="off" spellcheck="false"></text-input>
+                    <div class="field-error" id="rd-err"></div>
+                </div>
+                <div class="repo-delete-loading" id="rd-loading" role="status" aria-live="polite" hidden>
+                    <span class="busy-spin" aria-hidden="true"></span>
+                    <span>Deleting repository...</span>
+                </div>
+                <div class="modal-actions">
+                    <push-button id="rd-cancel">Cancel</push-button>
+                    <push-button id="rd-submit" class="btn-danger" disabled>Delete repo</push-button>
+                </div>
+            </div>
+        </popup-body>
+    </popup>
+
+    <popup id="repo-access-popup" width="600px" height="560px" draggable="false" close-button="true" close-label="Close access modal">
+        <popup-title><text-label id="acc-title"></text-label></popup-title>
         <popup-body>
             <div class="acc-stage" id="acc-stage">
                 <div class="acc-pane acc-pane-list" id="acc-pane-list">
@@ -195,11 +250,13 @@
                 </div>
 
                 <div class="acc-pane acc-pane-edit" id="acc-pane-edit">
-                    <button type="button" class="acc-back" id="acc-back">&larr; Back to list</button>
-                    <div class="acc-edit-title" id="acc-edit-title">Add a user</div>
+                    <div class="acc-edit-head">
+                        <button type="button" class="acc-back" id="acc-back">&larr; Back</button>
+                        <div class="acc-edit-title" id="acc-edit-title">Add a user</div>
+                    </div>
 
                     <div class="field acc-search-field" id="acc-search-field">
-                        <label for="acc-search">Find a user</label>
+                        <label class="sr-only" for="acc-search">Find a user</label>
                         <input type="text" id="acc-search" class="acc-search-input"
                                placeholder="Search by username or name…" autocomplete="off" spellcheck="false">
                         <div class="acc-results" id="acc-results"></div>

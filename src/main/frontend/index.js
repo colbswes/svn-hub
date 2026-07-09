@@ -25,10 +25,10 @@ Utils.afterComponentsLoaded(async function () {
     //  highlighting, diff rendering, charts) plus the shared render helpers
     //  (SvnHubUI) and the "Why Subversion?" modal (SvnHubWhyModal).  Loaded
     //  (version-busted) before routing starts so every screen can rely on them.
-    addStylesheet('svnhub-theme.css');
     addStylesheet('lib/devicon/devicon.css');   // self-hosted file-type icons (repository browser)
     addStylesheet('lib/highlight-github.min.css');
     addStylesheet('lib/diff2html.min.css');
+    addStylesheet('svnhub-theme.css');
     await getScripts([
         'lib/marked.min.js',
         'lib/highlight.min.js',
