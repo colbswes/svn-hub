@@ -80,8 +80,8 @@
         margin: 0;
     }
 </style>
-<div class="page-shell wrap-wide">
-    <div id="iss-view-list">
+<div class="page-shell wrap-wide t-page-slide ticket-page-slide" id="iss-slide">
+    <div class="t-page" id="iss-view-list" data-page-id="list">
         <header class="page-header">
             <div class="page-title-block">
                 <div class="eyebrow">Repository issues</div>
@@ -104,7 +104,7 @@
         </section>
     </div>
 
-    <div id="iss-view-detail" style="display:none;">
+    <div class="t-page" id="iss-view-detail" data-page-id="detail" style="display:none;">
         <div class="ticket-topbar">
             <push-button id="id-back" class="btn-sm">&larr; Issues</push-button>
             <div class="ticket-actions">
@@ -134,7 +134,7 @@
         </section>
     </div>
 
-    <div id="iss-view-new" style="display:none;">
+    <div class="t-page" id="iss-view-new" data-page-id="new" style="display:none;">
         <div class="ticket-topbar">
             <push-button id="in-back" class="btn-sm">&larr; Issues</push-button>
         </div>

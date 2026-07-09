@@ -1,4 +1,4 @@
-/* global $$, Utils, Server, Router */
+/* global $$, Utils, Server, Router, SvnHubUI */
 
 'use strict';
 
@@ -18,6 +18,8 @@
     const mobileNavToggle = document.getElementById('mobile-nav-toggle');
     const mobileNavMq = window.matchMedia('(max-width: 760px)');
     let activeNavId = null;
+    let navPillReady = false;
+    let navPillReadyQueued = false;
 
     function isMobileNav() {
         return mobileNavMq.matches;
@@ -74,8 +76,20 @@
         if (!primaryNav)
             return;
         primaryNav.classList.toggle('nav-has-active', !!ok);
-        if (ok)
+        if (!ok)
+            return;
+        if (navPillReady) {
             primaryNav.classList.add('nav-ready');
+            return;
+        }
+        if (navPillReadyQueued)
+            return;
+        navPillReadyQueued = true;
+        window.requestAnimationFrame(() => {
+            navPillReady = true;
+            navPillReadyQueued = false;
+            primaryNav.classList.add('nav-ready');
+        });
     }
 
     function setActive(id, page) {
@@ -344,12 +358,11 @@
     });
 
     // ---- global topbar search ----
-    const navQ = document.getElementById('nav-q');
-    const navQClear = document.getElementById('nav-q-clear');
+    const navSearchCtl = $$('nav-q');
+    const navQ = document.getElementById('nav-q-input');
     const navResults = document.getElementById('nav-results');
     const navSearch = document.getElementById('nav-search');
-    let navSearchTimer = null;
-    let navSearchToken = 0;
+    let navSearchRunner = null;
     let navDefaultRows = null;
     let navDefaultPromise = null;
 
@@ -363,18 +376,18 @@
         navResults.innerHTML = '';
     }
     function syncNavClear() {
-        navSearch.classList.toggle('has-value', !!navQ.value.trim());
+        navSearch.classList.toggle('has-value', !!navSearchCtl.getValue().trim());
     }
-    function clearNavSearch() {
-        clearTimeout(navSearchTimer);
-        navSearchToken++;
-        navQ.value = '';
+    function clearNavSearch(fromControl = false) {
+        navSearchRunner.cancel();
+        if (!fromControl)
+            navSearchCtl.clear();
         syncNavClear();
         hideNavResults();
     }
     function openRepoFromSearch(id, key, name) {
         hideNavResults();
-        navQ.value = '';
+        navSearchCtl.clear();
         syncNavClear();
         Utils.saveData('repoId', Number(id));
         Utils.saveData('repoKey', key);
@@ -389,7 +402,7 @@
     }
     function openPersonFromSearch(handle) {
         hideNavResults();
-        navQ.value = '';
+        navSearchCtl.clear();
         syncNavClear();
         Utils.saveData('personHandle', handle);
         Utils.saveData('personReturnTo', {
@@ -468,7 +481,7 @@
         return navDefaultPromise;
     }
     async function showDefaultNavResults() {
-        const q = navQ.value.trim();
+        const q = navSearchCtl.getValue().trim();
         if (q) {
             runNavSearch();
             return;
@@ -480,19 +493,20 @@
                 hideNavResults();
             return;
         }
-        const token = ++navSearchToken;
+        const token = navSearchRunner.cancel();
         hideNavResults();
         const rows = await loadDefaultNavRows();
-        if (token !== navSearchToken || navQ.value.trim() || document.activeElement !== navQ)
+        if (!navSearchRunner.isCurrent(token) || navSearchCtl.getValue().trim() || document.activeElement !== navQ)
             return;
         if (rows.length)
             renderNavGroups([{label: defaultNavLabel(), rows: rows, render: navRepoRow}], '');
         else
             hideNavResults();
     }
-    async function runNavSearch() {
-        const token = ++navSearchToken;
-        const q = navQ.value.trim();
+    async function runNavSearch(token) {
+        if (token == null)
+            token = navSearchRunner.cancel();
+        const q = navSearchCtl.getValue().trim();
         if (!q) {
             showDefaultNavResults();
             return;
@@ -502,7 +516,7 @@
             Server.callQuiet(searchRepoService(), searchRepoMethod(), {query: q, page: 0, pageSize: 6}),
             Server.callQuiet('services/DiscoverService', 'searchUsers', {query: q, page: 0, pageSize: 6})
         ]);
-        if (token !== navSearchToken || navQ.value.trim() !== q || document.activeElement !== navQ)
+        if (!navSearchRunner.isCurrent(token) || navSearchCtl.getValue().trim() !== q || document.activeElement !== navQ)
             return;
         renderNavGroups([
             {
@@ -519,38 +533,34 @@
             }
         ], 'No results match "' + q + '".');
     }
-    navQ.addEventListener('input', function () {
+    navSearchRunner = SvnHubUI.createDebouncedRunner(runNavSearch, 200);
+    navSearchCtl.onInput(function () {
         syncNavClear();
-        clearTimeout(navSearchTimer);
-        navSearchToken++;
-        if (!navQ.value.trim()) {
+        if (!navSearchCtl.getValue().trim()) {
             showDefaultNavResults();
             return;
         }
-        navSearchTimer = setTimeout(runNavSearch, 200);
+        navSearchRunner.schedule();
     });
-    navQClear.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-    });
-    navQClear.addEventListener('click', clearNavSearch);
+    navSearchCtl.onClear(() => clearNavSearch(true));
     navQ.addEventListener('focus', showDefaultNavResults);
     navQ.addEventListener('click', showDefaultNavResults);
-    navQ.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const q = navQ.value.trim();
-            if (!q) {
-                hideNavResults();
-                return;
-            }
-            Utils.saveData('discoverQuery', q);
-            Utils.saveData('discoverFilter', 'all');
-            navQ.value = '';
-            syncNavClear();
-            navQ.blur();
+    navSearchCtl.onSearch(function () {
+        const q = navSearchCtl.getValue().trim();
+        if (!q) {
             hideNavResults();
-            route('discover', 'screens/Discover/Discover');
-        } else if (e.key === 'Escape') {
+            return;
+        }
+        Utils.saveData('discoverQuery', q);
+        Utils.saveData('discoverFilter', 'all');
+        navSearchCtl.clear();
+        syncNavClear();
+        navQ.blur();
+        hideNavResults();
+        route('discover', 'screens/Discover/Discover');
+    });
+    navQ.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
             hideNavResults();
             navQ.blur();
         }
@@ -569,7 +579,7 @@
         }
     });
     navQ.addEventListener('blur', function () {
-        navSearchToken++;
+        navSearchRunner.cancel();
         setTimeout(hideNavResults, 150);
     });
     syncNavClear();

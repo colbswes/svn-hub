@@ -64,6 +64,8 @@ class Router {
     static #screenRoot = null;
     static #fallbackShell = null;
     static #fallbackTag = null;
+    static #loaderToken = 0;
+    static #loaderDelayMs = 140;
 
     /**
      * Register a route.
@@ -338,7 +340,12 @@ class Router {
 
     static #routeLoaderMarkup() {
         return '<div class="route-loader" role="status" aria-label="Loading">' +
-            '<span class="busy-spin route-loader-spin" aria-hidden="true"></span>' +
+            '<div class="route-loader-skeleton" aria-hidden="true">' +
+            '<span class="route-skel route-skel-title"></span>' +
+            '<span class="route-skel route-skel-line"></span>' +
+            '<span class="route-skel route-skel-line short"></span>' +
+            '<span class="route-skel route-skel-panel"></span>' +
+            '</div>' +
             '</div>';
     }
 
@@ -353,12 +360,19 @@ class Router {
         const host = tag ? document.getElementById(tag) : document.body;
         if (!host)
             return;
-        document.body.classList.add('route-loading-active');
-        host.innerHTML = Router.#routeLoaderMarkup();
-        await Router.#nextPaint();
+        const token = ++Router.#loaderToken;
+        setTimeout(function () {
+            if (token !== Router.#loaderToken)
+                return;
+            if (host !== document.body && !host.isConnected)
+                return;
+            document.body.classList.add('route-loading-active');
+            host.innerHTML = Router.#routeLoaderMarkup();
+        }, Router.#loaderDelayMs);
     }
 
     static #hideRouteLoader() {
+        Router.#loaderToken++;
         if (document.body)
             document.body.classList.remove('route-loading-active');
         Router.#clearBusyCursor();

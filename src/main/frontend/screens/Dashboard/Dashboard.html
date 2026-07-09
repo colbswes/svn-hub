@@ -4,7 +4,9 @@
             <span class="profile-avatar" id="repo-prof-avatar">SV</span>
             <div class="profile-id-text">
                 <h1>Welcome back, <text-label id="repo-prof-name"></text-label></h1>
-                <div class="profile-handle-line" id="repo-prof-handle-line"><span class="mono">@<text-label id="repo-prof-handle"></text-label></span></div>
+                <div class="profile-handle-line" id="repo-prof-handle-line">
+                    <button type="button" class="profile-handle-link mono" id="repo-prof-handle-link">@<text-label id="repo-prof-handle"></text-label></button>
+                </div>
             </div>
         </div>
         <div class="profile-stats" id="repo-prof-stats"></div>
@@ -92,7 +94,7 @@
         </div>
     </section>
 
-    <popup id="repo-form-popup" width="520px" height="560px">
+    <popup id="repo-form-popup" width="520px" height="560px" close-button="true">
         <popup-title>New repository</popup-title>
         <popup-body>
             <div class="modal-pad">

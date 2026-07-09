@@ -251,6 +251,476 @@ window.SvnHubUI = (function () {
             esc(label || 'Loading…') + '</span></div>';
     }
 
+    function createDebouncedRunner(run, delay) {
+        delay = delay == null ? 200 : Number(delay);
+        let timer = 0;
+        let token = 0;
+        function cancel() {
+            window.clearTimeout(timer);
+            token++;
+            return token;
+        }
+        function runNow() {
+            const current = cancel();
+            run(current);
+            return current;
+        }
+        function schedule() {
+            const current = cancel();
+            timer = window.setTimeout(() => run(current), delay);
+            return current;
+        }
+        return {
+            cancel: cancel,
+            runNow: runNow,
+            schedule: schedule,
+            current: () => token,
+            isCurrent: (candidate) => candidate === token
+        };
+    }
+
+    function elementFrom(ref) {
+        if (!ref)
+            return null;
+        if (typeof ref === 'string')
+            return document.getElementById(ref) || document.querySelector(ref);
+        return ref;
+    }
+
+    function cssTimeMs(name, fallback) {
+        const raw = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        if (!raw)
+            return fallback;
+        if (raw.endsWith('ms'))
+            return parseFloat(raw) || fallback;
+        if (raw.endsWith('s'))
+            return (parseFloat(raw) || fallback / 1000) * 1000;
+        return parseFloat(raw) || fallback;
+    }
+
+    function reducedMotion() {
+        return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function pageSlideDurationMs() {
+        return Math.max(cssTimeMs('--page-slide-dur', 250), cssTimeMs('--page-fade-dur', 250)) + 40;
+    }
+
+    function pageDirectionSign(direction) {
+        if (direction === 'back' || direction === 'left' || direction === -1 || direction === '-1')
+            return -1;
+        return 1;
+    }
+
+    function pageOffset(sign) {
+        return sign < 0 ? 'calc(var(--page-slide-distance) * -1)' : 'var(--page-slide-distance)';
+    }
+
+    function pageSlidePages(root) {
+        return Array.from(root.children).filter((el) => el.classList && el.classList.contains('t-page'));
+    }
+
+    function pageId(page) {
+        return page ? String(page.getAttribute('data-page-id') || '') : '';
+    }
+
+    function setPageActive(page, active) {
+        page.classList.toggle('is-active', active);
+        page.setAttribute('aria-hidden', active ? 'false' : 'true');
+        page.inert = !active;
+    }
+
+    function initPageSlide(root, initialPage) {
+        root = elementFrom(root);
+        if (!root)
+            return null;
+        root.classList.add('t-page-slide');
+        if (root.dataset.pageSlideReady === 'true')
+            return root;
+
+        const pages = pageSlidePages(root);
+        if (!pages.length)
+            return root;
+        let activeId = initialPage || root.getAttribute('data-page') || '';
+        if (!activeId) {
+            const visible = pages.find((page) => window.getComputedStyle(page).display !== 'none');
+            activeId = pageId(visible || pages[0]);
+        }
+
+        pages.forEach((page, index) => {
+            page.classList.add('t-page');
+            page.hidden = false;
+            if (page.style.display === 'none')
+                page.style.display = '';
+            page.style.setProperty('--t-page-from-x', pageOffset(index === 0 ? -1 : 1));
+            setPageActive(page, pageId(page) === String(activeId));
+        });
+        root.dataset.page = String(activeId);
+        root.dataset.pageSlideReady = 'true';
+        root.style.removeProperty('height');
+        root.classList.remove('is-animating');
+        return root;
+    }
+
+    function refreshPageSlide(root) {
+        root = elementFrom(root);
+        if (!root)
+            return;
+        const active = pageSlidePages(root).find((page) => page.classList.contains('is-active'));
+        if (active && root.classList.contains('is-animating'))
+            root.style.height = Math.max(active.scrollHeight, active.getBoundingClientRect().height) + 'px';
+    }
+
+    function setPageSlidePage(root, nextPage, opts) {
+        opts = opts || {};
+        root = initPageSlide(root, nextPage);
+        if (!root)
+            return;
+        const pages = pageSlidePages(root);
+        const nextId = String(nextPage || '');
+        const next = pages.find((page) => pageId(page) === nextId);
+        if (!next)
+            return;
+        const currentId = root.dataset.page || pageId(pages.find((page) => page.classList.contains('is-active'))) || pageId(pages[0]);
+        const current = pages.find((page) => pageId(page) === currentId);
+        if (currentId === nextId) {
+            refreshPageSlide(root);
+            return;
+        }
+
+        const oldIndex = Math.max(0, pages.indexOf(current));
+        const newIndex = Math.max(0, pages.indexOf(next));
+        const direction = opts.direction == null
+            ? (newIndex >= oldIndex ? 1 : -1)
+            : pageDirectionSign(opts.direction);
+        const animate = !reducedMotion() && root.dataset.pageSlideReady === 'true';
+
+        if (root.__pageSlideTimer) {
+            window.clearTimeout(root.__pageSlideTimer);
+            root.__pageSlideTimer = null;
+        }
+        if (animate) {
+            root.style.height = Math.max(root.getBoundingClientRect().height, 1) + 'px';
+            root.classList.add('is-animating');
+            root.offsetHeight;
+        }
+
+        pages.forEach((page, index) => {
+            let sign = index < newIndex ? -1 : 1;
+            if (page === next)
+                sign = direction;
+            else if (page === current)
+                sign = -direction;
+            page.style.setProperty('--t-page-from-x', pageOffset(sign));
+        });
+
+        root.dataset.page = nextId;
+        pages.forEach((page) => setPageActive(page, page === next));
+
+        if (!animate) {
+            root.classList.remove('is-animating');
+            root.style.removeProperty('height');
+            return;
+        }
+
+        root.style.height = Math.max(next.scrollHeight, next.getBoundingClientRect().height) + 'px';
+        root.__pageSlideTimer = window.setTimeout(() => {
+            root.__pageSlideTimer = null;
+            root.classList.remove('is-animating');
+            if (root.dataset.page === nextId)
+                root.style.removeProperty('height');
+        }, pageSlideDurationMs());
+    }
+
+    function animateContentIn(el, opts) {
+        el = elementFrom(el);
+        if (!el || reducedMotion())
+            return;
+        opts = opts || {};
+        const direction = pageDirectionSign(opts.direction);
+        if (el.__contentInFrame) {
+            window.cancelAnimationFrame(el.__contentInFrame);
+            el.__contentInFrame = null;
+        }
+        if (el.__contentInTimer) {
+            window.clearTimeout(el.__contentInTimer);
+            el.__contentInTimer = null;
+        }
+        el.classList.remove('t-content-enter', 'is-entering');
+        el.style.setProperty('--t-page-from-x', pageOffset(direction));
+        el.offsetHeight;
+        el.classList.add('t-content-enter');
+        el.__contentInFrame = window.requestAnimationFrame(() => {
+            el.__contentInFrame = null;
+            el.classList.add('is-entering');
+        });
+        el.__contentInTimer = window.setTimeout(() => {
+            el.__contentInTimer = null;
+            el.classList.remove('t-content-enter', 'is-entering');
+            el.style.removeProperty('--t-page-from-x');
+        }, pageSlideDurationMs());
+    }
+
+    function initTooltips() {
+        if (document.documentElement.dataset.svnhubTooltips === 'true')
+            return;
+        document.documentElement.dataset.svnhubTooltips = 'true';
+
+        let tooltip = null;
+        let label = null;
+        let arrow = null;
+        let activeTarget = null;
+        let pendingTarget = null;
+        let showTimer = 0;
+        let hideTimer = 0;
+
+        function ensureTooltip() {
+            if (tooltip)
+                return;
+            tooltip = document.createElement('div');
+            tooltip.id = 'svnhub-tooltip';
+            tooltip.className = 'app-tooltip app-tooltip--top';
+            tooltip.setAttribute('role', 'tooltip');
+            tooltip.setAttribute('aria-hidden', 'true');
+            label = document.createElement('div');
+            label.className = 'app-tooltip-label';
+            arrow = document.createElement('div');
+            arrow.className = 'app-tooltip-arrow';
+            arrow.setAttribute('aria-hidden', 'true');
+            tooltip.append(label, arrow);
+            document.body.appendChild(tooltip);
+        }
+
+        function tooltipText(target) {
+            if (!target)
+                return '';
+            let text = '';
+            const targetId = target.getAttribute('data-tooltip-target');
+            if (targetId) {
+                const source = document.getElementById(targetId);
+                if (source && source.textContent.trim())
+                    text = source.textContent.trim();
+            }
+            if (!text) {
+                const explicit = target.getAttribute('data-tooltip');
+                if (explicit)
+                    text = explicit;
+            }
+            if (!text) {
+                const title = target.getAttribute('title');
+                if (title) {
+                    target.setAttribute('data-tooltip', title);
+                    target.setAttribute('data-tooltip-original-title', title);
+                    target.removeAttribute('title');
+                    text = title;
+                }
+            }
+            return isDuplicateVisibleTooltip(target, text) ? '' : text;
+        }
+
+        function normalizeTooltipText(text) {
+            return String(text || '').replace(/\s+/g, ' ').trim();
+        }
+
+        function visibleTargetText(target) {
+            const parts = [];
+            const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    if (!normalizeTooltipText(node.nodeValue))
+                        return NodeFilter.FILTER_REJECT;
+                    let el = node.parentElement;
+                    while (el && el !== target) {
+                        const style = window.getComputedStyle(el);
+                        if (style.display === 'none' || style.visibility === 'hidden')
+                            return NodeFilter.FILTER_REJECT;
+                        el = el.parentElement;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            });
+            let node;
+            while ((node = walker.nextNode()))
+                parts.push(node.nodeValue);
+            return normalizeTooltipText(parts.join(' '));
+        }
+
+        function isDuplicateVisibleTooltip(target, text) {
+            const tip = normalizeTooltipText(text).toLowerCase();
+            const visible = visibleTargetText(target).toLowerCase();
+            return !!tip && !!visible && tip === visible;
+        }
+
+        function tooltipTarget(node) {
+            if (!node || node === document || node === window || !node.closest)
+                return null;
+            const target = node.closest('[data-tooltip], [data-tooltip-target], [title]');
+            if (!target || target.hasAttribute('data-tooltip-disabled'))
+                return null;
+            const text = tooltipText(target);
+            return text ? target : null;
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function placements(preferred) {
+            const ordered = [preferred || 'top', 'top', 'bottom', 'right', 'left'];
+            return ordered.filter((item, index) => item && ordered.indexOf(item) === index);
+        }
+
+        function choosePlacement(preferred, rect, width, height) {
+            const gap = 10;
+            const pad = 8;
+            for (const p of placements(preferred)) {
+                if (p === 'top' && rect.top >= height + gap + pad)
+                    return p;
+                if (p === 'bottom' && window.innerHeight - rect.bottom >= height + gap + pad)
+                    return p;
+                if (p === 'right' && window.innerWidth - rect.right >= width + gap + pad)
+                    return p;
+                if (p === 'left' && rect.left >= width + gap + pad)
+                    return p;
+            }
+            return preferred || 'top';
+        }
+
+        function targetInViewport(rect) {
+            return rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+        }
+
+        function positionTooltip() {
+            if (!activeTarget || !tooltip)
+                return;
+            const rect = activeTarget.getBoundingClientRect();
+            if (!targetInViewport(rect)) {
+                hide();
+                return;
+            }
+            const width = tooltip.offsetWidth;
+            const height = tooltip.offsetHeight;
+            const pad = 8;
+            const gap = 10;
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const placement = choosePlacement(activeTarget.getAttribute('data-tooltip-placement'), rect, width, height);
+            let left = centerX - width / 2;
+            let top = rect.top - height - gap;
+
+            if (placement === 'bottom')
+                top = rect.bottom + gap;
+            else if (placement === 'right') {
+                left = rect.right + gap;
+                top = centerY - height / 2;
+            } else if (placement === 'left') {
+                left = rect.left - width - gap;
+                top = centerY - height / 2;
+            }
+
+            left = clamp(left, pad, Math.max(pad, window.innerWidth - width - pad));
+            top = clamp(top, pad, Math.max(pad, window.innerHeight - height - pad));
+            tooltip.className = 'app-tooltip app-tooltip--' + placement + (tooltip.classList.contains('is-open') ? ' is-open' : '');
+            tooltip.style.left = Math.round(left) + 'px';
+            tooltip.style.top = Math.round(top) + 'px';
+            tooltip.style.setProperty('--tooltip-arrow-x', Math.round(clamp(centerX - left, 14, width - 14)) + 'px');
+            tooltip.style.setProperty('--tooltip-arrow-y', Math.round(clamp(centerY - top, 14, height - 14)) + 'px');
+        }
+
+        function describeTarget(target) {
+            if (target.hasAttribute('data-tooltip-prev-describedby'))
+                return;
+            const current = target.getAttribute('aria-describedby') || '';
+            target.setAttribute('data-tooltip-prev-describedby', current);
+            if (!current.split(/\s+/).includes('svnhub-tooltip'))
+                target.setAttribute('aria-describedby', (current + ' svnhub-tooltip').trim());
+        }
+
+        function undescribeTarget(target) {
+            if (!target)
+                return;
+            const previous = target.getAttribute('data-tooltip-prev-describedby');
+            target.removeAttribute('data-tooltip-prev-describedby');
+            if (previous)
+                target.setAttribute('aria-describedby', previous);
+            else
+                target.removeAttribute('aria-describedby');
+        }
+
+        function show(target) {
+            const text = tooltipText(target);
+            if (!text)
+                return;
+            window.clearTimeout(hideTimer);
+            ensureTooltip();
+            if (activeTarget && activeTarget !== target)
+                undescribeTarget(activeTarget);
+            activeTarget = target;
+            pendingTarget = null;
+            label.textContent = text;
+            tooltip.setAttribute('aria-hidden', 'false');
+            describeTarget(target);
+            positionTooltip();
+            window.requestAnimationFrame(() => {
+                if (!activeTarget)
+                    return;
+                positionTooltip();
+                tooltip.classList.add('is-open');
+            });
+        }
+
+        function scheduleShow(target, delay) {
+            window.clearTimeout(showTimer);
+            window.clearTimeout(hideTimer);
+            pendingTarget = target;
+            showTimer = window.setTimeout(() => show(target), delay);
+        }
+
+        function hide() {
+            window.clearTimeout(showTimer);
+            pendingTarget = null;
+            if (!tooltip)
+                return;
+            undescribeTarget(activeTarget);
+            activeTarget = null;
+            tooltip.classList.remove('is-open');
+            tooltip.setAttribute('aria-hidden', 'true');
+            window.clearTimeout(hideTimer);
+            hideTimer = window.setTimeout(() => {
+                if (!activeTarget && label)
+                    label.textContent = '';
+            }, 70);
+        }
+
+        document.addEventListener('pointerover', (e) => {
+            if (e.pointerType === 'touch')
+                return;
+            const target = tooltipTarget(e.target);
+            if (target && target !== activeTarget)
+                scheduleShow(target, 0);
+        });
+        document.addEventListener('pointerout', (e) => {
+            const target = activeTarget || pendingTarget;
+            if (!target || target.contains(e.relatedTarget))
+                return;
+            hide();
+        });
+        document.addEventListener('focusin', (e) => {
+            const target = tooltipTarget(e.target);
+            if (target)
+                scheduleShow(target, 0);
+        });
+        document.addEventListener('focusout', (e) => {
+            if (activeTarget && activeTarget === e.target)
+                hide();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape')
+                hide();
+        });
+        window.addEventListener('scroll', positionTooltip, true);
+        window.addEventListener('resize', positionTooltip);
+    }
+
     function readStoredArray(key) {
         if (!key)
             return null;
@@ -422,6 +892,106 @@ window.SvnHubUI = (function () {
         return files;
     }
 
+    const DIFF_FILE_PARAM = 'diffFile';
+    const DIFF_ROWS_PARAM = 'diffRows';
+
+    function parseDiffRows(value) {
+        const rows = new Set();
+        String(value || '').split(',').forEach((part) => {
+            const m = /^(\d+)(?:-(\d+))?$/.exec(part.trim());
+            if (!m)
+                return;
+            const a = Number(m[1]);
+            const b = Number(m[2] || m[1]);
+            const lo = Math.max(1, Math.min(a, b));
+            const hi = Math.max(1, Math.max(a, b));
+            for (let i = lo; i <= hi && rows.size < 500; i++)
+                rows.add(i);
+        });
+        return rows;
+    }
+
+    function formatDiffRows(rows) {
+        const vals = Array.from(rows || []).map(Number).filter((n) => n > 0).sort((a, b) => a - b);
+        if (!vals.length)
+            return '';
+        const parts = [];
+        let start = vals[0];
+        let prev = vals[0];
+        for (let i = 1; i <= vals.length; i++) {
+            const n = vals[i];
+            if (n === prev + 1) {
+                prev = n;
+                continue;
+            }
+            parts.push(start === prev ? String(start) : start + '-' + prev);
+            start = n;
+            prev = n;
+        }
+        return parts.join(',');
+    }
+
+    function diffFileToken(file, index) {
+        return (file && file.name) ? file.name : String(index + 1);
+    }
+
+    function findDiffFileIndex(files, token) {
+        if (!token)
+            return -1;
+        let idx = files.findIndex((f, i) => diffFileToken(f, i) === token);
+        if (idx >= 0)
+            return idx;
+        if (/^\d+$/.test(token)) {
+            idx = Number(token) - 1;
+            if (idx >= 0 && idx < files.length)
+                return idx;
+        }
+        return -1;
+    }
+
+    function readDiffSelection(files) {
+        const params = new URLSearchParams(location.search || '');
+        const fileToken = params.get(DIFF_FILE_PARAM) || '';
+        const rows = parseDiffRows(params.get(DIFF_ROWS_PARAM) || '');
+        const fileIndex = findDiffFileIndex(files, fileToken);
+        if (fileIndex < 0 || !rows.size)
+            return null;
+        return {
+            fileIndex: fileIndex,
+            fileToken: diffFileToken(files[fileIndex], fileIndex),
+            rows: rows,
+            anchor: Math.min(...rows),
+            pendingScroll: true
+        };
+    }
+
+    function writeDiffSelection(selection) {
+        try {
+            const url = new URL(location.href);
+            const rows = selection ? formatDiffRows(selection.rows) : '';
+            if (selection && selection.fileToken && rows) {
+                url.searchParams.set(DIFF_FILE_PARAM, selection.fileToken);
+                url.searchParams.set(DIFF_ROWS_PARAM, rows);
+            } else {
+                url.searchParams.delete(DIFF_FILE_PARAM);
+                url.searchParams.delete(DIFF_ROWS_PARAM);
+            }
+            const target = url.pathname + url.search + url.hash;
+            const currentUrl = location.pathname + location.search + location.hash;
+            if (target === currentUrl)
+                return;
+            const state = Object.assign({}, history.state || {}, {
+                diffFile: selection && selection.fileToken ? selection.fileToken : '',
+                diffRows: rows
+            });
+            history.replaceState(state, '', target);
+        } catch (e) { /* history may be unavailable */ }
+    }
+
+    function diffRowElements(section) {
+        return Array.from(section.querySelectorAll('tr[data-diff-row]'));
+    }
+
     /**
      * Render a unified diff into `host` with per-file lazy expansion.
      * Small files expand automatically (within a total budget) so typical
@@ -461,6 +1031,51 @@ window.SvnHubUI = (function () {
         html += '</div>';
         host.innerHTML = html;
         const sections = host.querySelectorAll('.diff-file');
+        host.__diffSelection = readDiffSelection(files);
+
+        function syncDiffSelectionClasses() {
+            sections.forEach((sec, i) => {
+                const selection = host.__diffSelection;
+                const active = selection && selection.fileIndex === i;
+                sec.classList.toggle('has-line-selection', !!active);
+                diffRowElements(sec).forEach((row) => {
+                    const n = Number(row.getAttribute('data-diff-row'));
+                    row.classList.toggle('diff-row-selected', !!active && selection.rows.has(n));
+                });
+            });
+        }
+
+        function scrollSelectedRowsIntoView(i, body) {
+            const selection = host.__diffSelection;
+            if (!selection || !selection.pendingScroll || selection.fileIndex !== i)
+                return;
+            const row = body.querySelector('tr.diff-row-selected');
+            if (!row)
+                return;
+            selection.pendingScroll = false;
+            setTimeout(() => {
+                if (document.body.contains(row))
+                    row.scrollIntoView({block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth'});
+            }, 30);
+        }
+
+        function prepareSelectableRows(i, body) {
+            let rowNo = 0;
+            body.querySelectorAll('tr').forEach((row) => {
+                const lineNo = row.querySelector('.d2h-code-linenumber, .d2h-code-side-linenumber');
+                if (!lineNo || !/\d/.test(lineNo.textContent || ''))
+                    return;
+                rowNo++;
+                row.classList.add('diff-selectable-row');
+                row.setAttribute('data-diff-row', String(rowNo));
+                lineNo.setAttribute('data-diff-row', String(rowNo));
+                lineNo.setAttribute('role', 'button');
+                lineNo.setAttribute('tabindex', '0');
+                lineNo.setAttribute('aria-label', 'Select diff row ' + rowNo);
+            });
+            syncDiffSelectionClasses();
+            scrollSelectedRowsIntoView(i, body);
+        }
 
         function renderBody(i) {
             const body = sections[i].querySelector('.diff-file-body');
@@ -472,13 +1087,85 @@ window.SvnHubUI = (function () {
             if (f.lines.length > PLAIN_FALLBACK_LINES || typeof Diff2Html === 'undefined') {
                 body.innerHTML = '<p class="muted diff-plain-note">Large file — showing plain diff.</p>' +
                     '<pre class="diff-plain">' + esc(text) + '</pre>';
+                scrollSelectedRowsIntoView(i, body);
                 return;
             }
             body.innerHTML = Diff2Html.html(text,
                 {drawFileList: false, matching: 'lines', outputFormat: 'line-by-line'});
+            prepareSelectableRows(i, body);
+        }
+
+        function expandFile(i, delayed) {
+            const sec = sections[i];
+            if (!sec)
+                return null;
+            const body = sec.querySelector('.diff-file-body');
+            body.hidden = false;
+            sec.classList.add('open');
+            if (!body.dataset.rendered) {
+                if (delayed) {
+                    body.innerHTML = spinner('Rendering…');
+                    setTimeout(() => renderBody(i), 15);
+                } else {
+                    renderBody(i);
+                }
+            } else {
+                syncDiffSelectionClasses();
+                scrollSelectedRowsIntoView(i, body);
+            }
+            return body;
+        }
+
+        function selectDiffRow(lineNo, event) {
+            const sec = lineNo.closest('.diff-file');
+            const row = lineNo.closest('tr[data-diff-row]');
+            if (!sec || !row)
+                return;
+            const fileIndex = Number(sec.getAttribute('data-df'));
+            const rowNo = Number(row.getAttribute('data-diff-row'));
+            if (!Number.isFinite(fileIndex) || !rowNo)
+                return;
+            const current = host.__diffSelection;
+            const sameFile = current && current.fileIndex === fileIndex;
+            let rows = new Set();
+            let anchor = rowNo;
+
+            if (event.shiftKey && sameFile && current.anchor) {
+                const lo = Math.min(current.anchor, rowNo);
+                const hi = Math.max(current.anchor, rowNo);
+                rows = (event.metaKey || event.ctrlKey) ? new Set(current.rows) : new Set();
+                for (let i = lo; i <= hi; i++)
+                    rows.add(i);
+                anchor = current.anchor;
+            } else if ((event.metaKey || event.ctrlKey) && sameFile) {
+                rows = new Set(current.rows);
+                if (rows.has(rowNo))
+                    rows.delete(rowNo);
+                else
+                    rows.add(rowNo);
+            } else {
+                rows.add(rowNo);
+            }
+
+            host.__diffSelection = rows.size ? {
+                fileIndex: fileIndex,
+                fileToken: diffFileToken(files[fileIndex], fileIndex),
+                rows: rows,
+                anchor: anchor,
+                pendingScroll: false
+            } : null;
+            syncDiffSelectionClasses();
+            writeDiffSelection(host.__diffSelection);
         }
 
         host.querySelector('.diff-files').addEventListener('click', (e) => {
+            const lineNo = e.target.closest('.d2h-code-linenumber, .d2h-code-side-linenumber');
+            if (lineNo) {
+                e.preventDefault();
+                e.stopPropagation();
+                selectDiffRow(lineNo, e);
+                return;
+            }
             const head = e.target.closest('.diff-file-head');
             if (!head)
                 return;
@@ -486,17 +1173,24 @@ window.SvnHubUI = (function () {
             const i = Number(sec.getAttribute('data-df'));
             const body = sec.querySelector('.diff-file-body');
             if (body.hidden) {
-                body.hidden = false;
-                sec.classList.add('open');
-                if (!body.dataset.rendered) {
-                    body.innerHTML = spinner('Rendering…');
-                    setTimeout(() => renderBody(i), 15);   // paint the spinner first
-                }
+                expandFile(i, true);
             } else {
                 body.hidden = true;
                 sec.classList.remove('open');
             }
         });
+        host.querySelector('.diff-files').addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ')
+                return;
+            const lineNo = e.target.closest('.d2h-code-linenumber, .d2h-code-side-linenumber');
+            if (!lineNo)
+                return;
+            e.preventDefault();
+            selectDiffRow(lineNo, e);
+        });
+
+        if (host.__diffSelection)
+            expandFile(host.__diffSelection.fileIndex, false);
 
         // Auto-expand small files one at a time, yielding between each so the
         // page stays interactive even when there are many files.
@@ -558,9 +1252,15 @@ window.SvnHubUI = (function () {
         }).join('');
     }
 
+    initTooltips();
+
     return {esc: esc, initials: initials, personInitials: personInitials, tone: tone, fmtDate: fmtDate,
         relTime: relTime, repoCard: repoCard, statBlock: statBlock, contributorBars: contributorBars,
         weeklySpark: weeklySpark, topReposList: topReposList, commitMessage: commitMessage,
-        spinner: spinner, initExpandableSections: initExpandableSections, renderUnifiedDiff: renderUnifiedDiff,
+        spinner: spinner, createDebouncedRunner: createDebouncedRunner,
+        initTooltips: initTooltips, initExpandableSections: initExpandableSections,
+        initPageSlide: initPageSlide, setPageSlidePage: setPageSlidePage,
+        refreshPageSlide: refreshPageSlide, animateContentIn: animateContentIn,
+        renderUnifiedDiff: renderUnifiedDiff,
         openRepo: openRepo, openPerson: openPerson, goBack: goBack, routeTarget: routeTarget};
 })();

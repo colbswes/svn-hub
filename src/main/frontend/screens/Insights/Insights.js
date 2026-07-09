@@ -618,7 +618,7 @@
                 const windowLabel = day + ' ' + fmtHour(h) + '-' + fmtHour((h + 1) % 24);
                 const countLabel = n + ' read' + (n === 1 ? '' : 's');
                 const tip = windowLabel + ' · ' + countLabel;
-                html += '<span class="heat-cell" tabindex="0" role="img" data-tip="' + escAttr(tip) + '" data-heat-window="' + escAttr(windowLabel) + '" data-heat-count="' + escAttr(countLabel) + '" aria-label="' + escAttr(tip) + '"' +
+                html += '<span class="heat-cell" tabindex="0" role="img" data-tooltip="' + escAttr(tip) + '" data-tooltip-placement="top" aria-label="' + escAttr(tip) + '"' +
                     (alpha ? ' style="background:rgba(31,93,87,' + alpha + ')"' : '') + '></span>';
             }
             html += '</div>';
@@ -644,55 +644,6 @@
             bodySelector: '.ins-section-body',
             storageKey: scopedToRepo ? null : LS.collapsed,
             onExpanded: resizeInsightCharts
-        });
-    }
-
-    function initHeatmapTooltip() {
-        const host = document.getElementById('read-heatmap');
-        const tip = document.getElementById('heat-tooltip');
-        if (!host || !tip)
-            return;
-        let activeCell = null;
-
-        function hide() {
-            activeCell = null;
-            tip.classList.remove('show');
-            tip.setAttribute('aria-hidden', 'true');
-        }
-        function showFor(cell, x, y) {
-            if (cell !== activeCell) {
-                activeCell = cell;
-                tip.innerHTML = '<strong>' + esc(cell.dataset.heatWindow || '') + '</strong><span>' + esc(cell.dataset.heatCount || '') + '</span>';
-                tip.classList.add('show');
-                tip.setAttribute('aria-hidden', 'false');
-            }
-            const pad = 14;
-            const maxX = Math.max(12, window.innerWidth - 240);
-            const maxY = Math.max(12, window.innerHeight - 78);
-            tip.style.left = Math.min(x + pad, maxX) + 'px';
-            tip.style.top = Math.min(y + pad, maxY) + 'px';
-        }
-        host.addEventListener('mousemove', (e) => {
-            const cell = e.target.closest('.heat-cell');
-            if (!cell || !host.contains(cell)) {
-                hide();
-                return;
-            }
-            showFor(cell, e.clientX, e.clientY);
-        });
-        host.addEventListener('mouseleave', hide);
-        // Keyboard / touch: anchor the tooltip to the focused cell's rect so
-        // non-mouse users get the same detail.
-        host.addEventListener('focusin', (e) => {
-            const cell = e.target.closest('.heat-cell');
-            if (!cell || !host.contains(cell))
-                return;
-            const rect = cell.getBoundingClientRect();
-            showFor(cell, rect.left + rect.width / 2, rect.bottom);
-        });
-        host.addEventListener('focusout', (e) => {
-            if (!host.contains(e.relatedTarget))
-                hide();
         });
     }
 
@@ -947,7 +898,6 @@
 
     // ---------- init ----------
     initInsightSections();
-    initHeatmapTooltip();
 
     const retryBtn = document.getElementById('ins-error-retry');
     if (retryBtn)

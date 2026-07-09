@@ -364,6 +364,9 @@
             btn.classList.toggle('is-editing', editing);
             btn.setAttribute('aria-label', editing ? 'Cancel name edit' : 'Edit name');
             btn.setAttribute('title', editing ? 'Cancel edit' : 'Edit name');
+            const swap = btn.querySelector('.t-icon-swap');
+            if (swap)
+                swap.setAttribute('data-state', editing ? 'b' : 'a');
         }
         if (saveBtn)
             saveBtn.hidden = !editing;

@@ -8,6 +8,7 @@
     const WS_BROWSE = 'services/BrowseService';
     const WS_HIST = 'services/HistoryService';
     const WS_STATS = 'services/StatsService';
+    const FILE_LINES_PARAM = 'lines';
 
     const guest = Utils.getData('guest') === true;
     const repoId = Utils.getData('repoId');
@@ -56,6 +57,55 @@
     const initialFilesRoute = filesRouteFromUrl();
     let currentPath = initialFilesRoute.path;
     let currentFilePath = initialFilesRoute.filePath;
+    const repoWorkspace = document.querySelector('.repo-workspace');
+    const repoMainSlide = document.getElementById('repo-main-slide');
+    const filesSlide = document.getElementById('files-slide');
+    const historySlide = document.getElementById('history-slide');
+    const repoRailToggle = document.getElementById('repo-rail-toggle');
+    const repoSectionButtons = Array.from(document.querySelectorAll('.repo-section-nav .side-nav-btn'));
+    const repoRailMobileMq = window.matchMedia('(max-width: 960px)');
+
+    function setTooltip(el, text) {
+        if (!el)
+            return;
+        el.removeAttribute('title');
+        el.removeAttribute('data-tooltip-original-title');
+        if (text)
+            el.setAttribute('data-tooltip', text);
+        else
+            el.removeAttribute('data-tooltip');
+    }
+
+    function syncRepoRailTooltips(collapsed) {
+        const showSectionTooltips = !!collapsed && !repoRailMobileMq.matches;
+        repoSectionButtons.forEach((btn) => {
+            setTooltip(btn, showSectionTooltips ? btn.getAttribute('aria-label') : '');
+        });
+        setTooltip(repoRailToggle, collapsed ? 'Show sidebar' : 'Collapse sidebar');
+    }
+
+    function setRepoRailCollapsed(collapsed, persist = false) {
+        const on = !!collapsed;
+        if (repoWorkspace)
+            repoWorkspace.classList.toggle('repo-rail-collapsed', on);
+        if (repoRailToggle) {
+            repoRailToggle.setAttribute('aria-expanded', on ? 'false' : 'true');
+            repoRailToggle.setAttribute('aria-label', on ? 'Show repository sidebar' : 'Hide repository sidebar');
+        }
+        syncRepoRailTooltips(on);
+        if (persist)
+            Utils.saveData('repoRailCollapsed', on);
+    }
+
+    setRepoRailCollapsed(Utils.getData('repoRailCollapsed') === true);
+    if (repoRailToggle) {
+        repoRailToggle.addEventListener('click', () => {
+            setRepoRailCollapsed(!(repoWorkspace && repoWorkspace.classList.contains('repo-rail-collapsed')), true);
+        });
+    }
+    if (repoRailMobileMq.addEventListener)
+        repoRailMobileMq.addEventListener('change', () =>
+            syncRepoRailTooltips(repoWorkspace && repoWorkspace.classList.contains('repo-rail-collapsed')));
 
     function ownerFromKey(key = repoKey) {
         return key && key.indexOf('/') > -1 ? key.substring(0, key.indexOf('/')) : '';
@@ -97,11 +147,10 @@
                 el.classList.toggle('active', x === menuId);
         });
     }
-    const ALL_PANELS = ['view-history', 'view-files', 'view-readme', 'view-embed'];
     const SECTION_OF = {'go-history': 'history', 'go-files': 'files', 'go-issues': 'issues', 'go-mrs': 'mrs', 'go-insights': 'insights', 'go-readme': 'readme'};
     const MENU_OF_SECTION = {history: 'go-history', files: 'go-files', issues: 'go-issues', mrs: 'go-mrs', insights: 'go-insights', readme: 'go-readme'};
-    let contributorsLoaded = false;
     let embedLoaded = null;
+    let activeMenu = null;
     // Deep-link support: a referring screen (e.g. the dashboard activity feed)
     // may ask for a specific section — and optionally a revision to focus in
     // History — via saved data. These win over any stale ?section= in the URL.
@@ -111,32 +160,33 @@
     if (startMenu === 'go-insights' && guest)
         startMenu = 'go-files';
 
+    function mainPageForMenu(menuId) {
+        const panelId = LOCAL_VIEWS[menuId] || (EMBED_PAGES[menuId] ? 'view-embed' : LOCAL_VIEWS['go-files']);
+        return panelId.replace(/^view-/, '');
+    }
+    function menuDirection(menuId) {
+        if (!activeMenu)
+            return 1;
+        const oldIndex = MENU.indexOf(activeMenu);
+        const newIndex = MENU.indexOf(menuId);
+        return newIndex >= oldIndex ? 1 : -1;
+    }
     function showInitialPanel(menuId) {
         markActiveMenu(menuId);
-        ALL_PANELS.forEach((p) => {
-            const el = document.getElementById(p);
-            if (el)
-                el.style.display = 'none';
-        });
-        const panelId = LOCAL_VIEWS[menuId] || (EMBED_PAGES[menuId] ? 'view-embed' : LOCAL_VIEWS['go-files']);
-        const panel = document.getElementById(panelId);
-        if (panel)
-            panel.style.display = '';
+        SvnHubUI.initPageSlide(repoMainSlide, mainPageForMenu(menuId));
+        SvnHubUI.initPageSlide(filesSlide, currentFilePath ? 'file' : 'browse');
+        SvnHubUI.initPageSlide(historySlide, revFromUrl() ? 'detail' : 'feed');
+        activeMenu = menuId;
     }
     showInitialPanel(startMenu);
 
     // Switch the visible panel. Pure DOM/content work — never touches history.
     async function applyView(menuId, filesRoute = null) {
+        const direction = menuDirection(menuId);
+        activeMenu = menuId;
         markActiveMenu(menuId);
-        ALL_PANELS.forEach((p) => {
-            const el = document.getElementById(p);
-            if (el)
-                el.style.display = 'none';
-        });
+        SvnHubUI.setPageSlidePage(repoMainSlide, mainPageForMenu(menuId), {direction: direction});
         if (LOCAL_VIEWS[menuId]) {
-            const el = document.getElementById(LOCAL_VIEWS[menuId]);
-            if (el)
-                el.style.display = '';
             if (menuId === 'go-files')
                 await showFilesView(filesRoute);   // create/populate the grid now that it's visible
             if (menuId === 'go-history') {
@@ -148,15 +198,18 @@
                     showRevisionFeed();
             }
         } else if (EMBED_PAGES[menuId]) {
-            const host = document.getElementById('view-embed');
-            if (host)
-                host.style.display = '';
             const page = EMBED_PAGES[menuId];
             if (embedLoaded !== page) {
                 if (menuId === 'go-insights')
                     Utils.saveData('insightsRepoId', repoId);
-                await Utils.loadPage(page, 'repo-embed-host');
-                embedLoaded = page;
+                try {
+                    await Utils.loadPageFragment(page, 'repo-embed-host');
+                    embedLoaded = page;
+                    SvnHubUI.animateContentIn(document.getElementById('repo-embed-host'), {direction: direction});
+                } catch (e) {
+                    embedLoaded = null;
+                    throw e;
+                }
                 if (Utils.setAppNavActive)
                     Utils.setAppNavActive(repoNav());   // undo the embedded screen's own nav highlight
             } else {
@@ -189,6 +242,8 @@
             url.searchParams.delete('issue');
             url.searchParams.delete('mr');
             url.searchParams.delete('rev');
+            url.searchParams.delete('diffFile');
+            url.searchParams.delete('diffRows');
         }
         if (section === 'files') {
             const route = filesRoute || {path: currentPath, filePath: currentFilePath};
@@ -202,10 +257,13 @@
                 url.searchParams.set('file', '1');
             else
                 url.searchParams.delete('file');
+            if (!(filePath && keepTicket))
+                url.searchParams.delete(FILE_LINES_PARAM);
             url.searchParams.delete('view');
         } else {
             url.searchParams.delete('path');
             url.searchParams.delete('file');
+            url.searchParams.delete(FILE_LINES_PARAM);
             url.searchParams.delete('view');
         }
         return url.pathname + url.search + url.hash;
@@ -268,32 +326,6 @@
         selectView('go-insights');
     });
     menuEl('go-readme').addEventListener('click', () => selectView('go-readme'));
-
-    async function loadAboutContributors() {
-        if (contributorsLoaded)
-            return;
-        contributorsLoaded = true;
-        if (guest) {
-            document.getElementById('about-contributors').innerHTML = '<p class="muted" style="margin:0;">Sign in to see contributor activity.</p>';
-            return;
-        }
-        const today = (typeof DateUtils !== 'undefined') ? DateUtils.today() : 20260101;
-        const res = await Server.call(WS_STATS, 'contributors', {repoId: repoId, beginDay: 19900101, endDay: today, limit: 8});
-        // The stats service also counts checkout/update events, which surfaces
-        // "(unmapped)" rows with zero commits — not contributors; drop them here.
-        const rows = (res._Success && res.rows)
-            ? res.rows
-                .map((r) => ({userName: r.username, handle: r.handle, commits: Number(r.commits) || 0}))
-                .filter((r) => r.commits > 0)
-            : [];
-        document.getElementById('about-contributors').innerHTML = SvnHubUI.contributorBars(rows);
-    }
-    document.getElementById('about-contributors').addEventListener('click', (e) => {
-        const person = e.target.closest('[data-contributor-handle]');
-        if (!person)
-            return;
-        SvnHubUI.openPerson(person.getAttribute('data-contributor-handle'), personReturnTarget());
-    });
 
     // ---- helpers ----
     function join(base, name) {
@@ -380,6 +412,7 @@
         ts: 'devicon-typescript-plain',
         jsx: 'devicon-react-plain', tsx: 'devicon-react-plain',
         json: 'devicon-json-plain',
+        md: 'devicon-markdown-original', markdown: 'devicon-markdown-original',
         html: 'devicon-html5-plain', htm: 'devicon-html5-plain',
         css: 'devicon-css3-plain', scss: 'devicon-sass-plain', sass: 'devicon-sass-plain', less: 'devicon-less-plain',
         xml: 'devicon-xml-plain',
@@ -393,13 +426,12 @@
         rb: 'devicon-ruby-plain',
         php: 'devicon-php-plain',
         swift: 'devicon-swift-plain',
-        kt: 'devicon-kotlin-plain', kts: 'devicon-kotlin-plain',
-        scala: 'devicon-scala-plain', sc: 'devicon-scala-plain',
         sh: 'devicon-bash-plain', bash: 'devicon-bash-plain', zsh: 'devicon-bash-plain',
         ps1: 'devicon-powershell-plain',
-        md: 'devicon-markdown-plain', markdown: 'devicon-markdown-plain',
-        yml: 'devicon-yaml-plain', yaml: 'devicon-yaml-plain',
+        kt: 'devicon-kotlin-plain', kts: 'devicon-kotlin-plain',
+        scala: 'devicon-scala-plain', sc: 'devicon-scala-plain',
         sql: 'devicon-sqlite-plain',
+        yml: 'devicon-yaml-plain', yaml: 'devicon-yaml-plain',
         vue: 'devicon-vuejs-plain',
         svelte: 'devicon-svelte-plain',
         lua: 'devicon-lua-plain',
@@ -415,14 +447,14 @@
         tf: 'devicon-terraform-plain',
         gradle: 'devicon-gradle-plain'
     };
-    const FOLDER_SVG = '<svg class="file-kind-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M1.75 2A1.75 1.75 0 0 0 0 3.75v8.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7A1.75 1.75 0 0 0 14.25 3.5H6.59L5.28 2.22A.75.75 0 0 0 4.75 2H1.75Z"/></svg>';
-    const GENERIC_FILE_SVG = '<svg class="file-kind-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M9.5 1H3.75A1.75 1.75 0 0 0 2 2.75v10.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0 0 14 13.25V5.5L9.5 1Zm0 1.5L12.5 5.5H9.5V2.5Z"/></svg>';
+    const FOLDER_ICON = '<span class="file-kind-icon svnhub-icon icon-folder" aria-hidden="true"></span>';
+    const GENERIC_FILE_ICON = '<span class="file-kind-icon svnhub-icon icon-file-text" aria-hidden="true"></span>';
     function fileKindCellRenderer(params) {
         if (!params || !params.data)
             return '';
         const data = params.data;
         if (data.kind === 'dir')
-            return FOLDER_SVG;
+            return FOLDER_ICON;
         const dot = data.name.lastIndexOf('.');
         if (dot >= 0) {
             const ext = data.name.substring(dot + 1).toLowerCase();
@@ -435,8 +467,8 @@
         if (lower === 'dockerfile')
             return '<i class="devicon-docker-plain file-kind-icon" aria-hidden="true"></i>';
         if (lower === 'license' || lower === 'license.txt' || lower === 'license.md')
-            return GENERIC_FILE_SVG;
-        return GENERIC_FILE_SVG;
+            return GENERIC_FILE_ICON;
+        return GENERIC_FILE_ICON;
     }
     const browseCols = [
         {headerName: 'Kind', field: 'icon', width: 72, cellRenderer: fileKindCellRenderer},
@@ -454,6 +486,7 @@
     // lazily the first time the Files section is actually shown.
     let gridShown = false;
     let filesLoaded = false;
+    let browseContentPainted = false;
     const STANDARD_ROOTS = ['trunk', 'branches', 'tags'];
     const STANDARD_ROOT_SET = new Set(STANDARD_ROOTS);
     let standardRootsKnown = false;
@@ -464,6 +497,20 @@
             gridShown = true;
         }
     }
+    function setBrowseGridHeight(rowCount) {
+        const gridEl = document.getElementById('browse-grid');
+        if (!gridEl)
+            return;
+        const rows = Math.max(1, Number(rowCount) || 0);
+        const maxRows = window.innerHeight < 760 ? 9 : 13;
+        const visibleRows = Math.min(rows, maxRows);
+        const styles = window.getComputedStyle(gridEl);
+        const headerHeight = parseFloat(styles.getPropertyValue('--ag-header-height')) || 38;
+        const rowHeight = parseFloat(styles.getPropertyValue('--ag-row-height')) || 38;
+        const borderAllowance = 8;
+        gridEl.classList.toggle('is-fit-height', rows <= maxRows);
+        gridEl.style.height = (headerHeight + visibleRows * rowHeight + borderAllowance) + 'px';
+    }
     function hideBrowseEmpty() {
         const empty = document.getElementById('browse-empty');
         if (!empty)
@@ -471,49 +518,54 @@
         empty.hidden = true;
         empty.innerHTML = '';
     }
-    function hideBrowseResults() {
+    function setBrowseGridVisible(visible, reserveSpace = false) {
         const gridEl = document.getElementById('browse-grid');
-        if (gridEl)
-            gridEl.style.display = 'none';
+        if (!gridEl)
+            return;
+        gridEl.hidden = !visible && !reserveSpace;
+        gridEl.style.visibility = reserveSpace ? 'hidden' : '';
+    }
+    function hideBrowseResults() {
+        setBrowseGridVisible(false, true);
         hideBrowseEmpty();
     }
-    function showDirectoryList(resize = true) {
+    function animateBrowseContent(direction) {
+        const page = document.getElementById('files-browse-page');
+        if (browseContentPainted)
+            SvnHubUI.animateContentIn(page, {direction: direction || 1});
+        browseContentPainted = true;
+    }
+    function showDirectoryList(resize = true, direction = 1) {
         currentFilePath = '';
         hideBrowseEmpty();
-        const gridEl = document.getElementById('browse-grid');
-        const viewer = document.getElementById('file-viewer');
-        if (gridEl)
-            gridEl.style.display = '';
-        if (viewer)
-            viewer.style.display = 'none';
+        setBrowseGridVisible(true);
+        SvnHubUI.setPageSlidePage(filesSlide, 'browse', {direction: direction});
+        animateBrowseContent(direction);
         if (resize && gridShown)
             window.dispatchEvent(new Event('resize'));
     }
-    function setBrowseEmpty(message) {
+    function setBrowseEmpty(message, direction = 1) {
         const empty = document.getElementById('browse-empty');
-        const gridEl = document.getElementById('browse-grid');
         if (!message) {
             hideBrowseEmpty();
             return;
         }
-        if (gridEl)
-            gridEl.style.display = 'none';
+        setBrowseGridVisible(false);
         if (!empty)
             return;
         empty.hidden = false;
         empty.innerHTML = '<p class="muted">' + escapeHtml(message) + '</p>';
+        SvnHubUI.setPageSlidePage(filesSlide, 'browse', {direction: direction});
+        animateBrowseContent(direction);
     }
     function showInlineFile() {
         hideBrowseEmpty();
-        const gridEl = document.getElementById('browse-grid');
-        const viewer = document.getElementById('file-viewer');
-        if (gridEl)
-            gridEl.style.display = 'none';
-        if (viewer)
-            viewer.style.display = '';
+        setBrowseGridVisible(false);
+        SvnHubUI.setPageSlidePage(filesSlide, 'file', {direction: 1});
     }
     async function restoreFilesRoute(filesRoute) {
         const filePath = normalizeRepoPath(filesRoute && filesRoute.filePath);
+        const direction = filesRoute && filesRoute.direction ? filesRoute.direction : 1;
         currentFilePath = filePath;
         currentPath = filePath ? parentPath(filePath) : normalizeRepoPath(filesRoute && filesRoute.path);
         filesLoaded = true;
@@ -523,7 +575,7 @@
             if (!ok)
                 showDirectoryList();
         } else {
-            await loadDir();
+            await loadDir({direction: direction});
         }
     }
     async function showFilesView(filesRoute = null) {
@@ -634,11 +686,11 @@
 
     async function loadDir(options = {}) {
         const shouldShowList = options.showList !== false;
-        if (shouldShowList)
+        const direction = options.direction || 1;
+        if (shouldShowList && !browseContentPainted)
             hideBrowseResults();
         renderCrumb();
         updateRootsActive();
-        browseGrid.clear();
         let res = null;
         if (currentPath === '')
             res = await Server.callQuiet(WS_BROWSE, 'listDir', {repoId: repoId, path: ''});
@@ -672,20 +724,25 @@
                     return a.kind === 'dir' ? -1 : 1;
                 return a.name.localeCompare(b.name);
             });
+            browseGrid.clear();
             browseGrid.addRecords(rows);
+            setBrowseGridHeight(rows.length);
             if (shouldShowList && rows.length)
-                showDirectoryList(false);
+                showDirectoryList(false, direction);
             else if (shouldShowList)
-                setBrowseEmpty(currentPath ? 'No files in /' + currentPath + ' yet.' : 'No files in this repository yet.');
+                setBrowseEmpty(currentPath ? 'No files in /' + currentPath + ' yet.' : 'No files in this repository yet.', direction);
         } else if (shouldShowList) {
-            setBrowseEmpty(currentPath ? '/' + currentPath + ' does not exist yet.' : 'No files in this repository yet.');
+            browseGrid.clear();
+            setBrowseEmpty(currentPath ? '/' + currentPath + ' does not exist yet.' : 'No files in this repository yet.', direction);
         }
     }
 
     // Jump to a root from the chips beside the breadcrumb: switch to the Files
     // section (creating the grid on first use), then list the path.
     async function navigateDir(path, mode = 'push') {
+        const previousPath = currentPath;
         const route = {path: normalizeRepoPath(path), filePath: ''};
+        route.direction = route.path && route.path.indexOf(previousPath) === 0 && route.path !== previousPath ? 1 : -1;
         currentPath = route.path;
         currentFilePath = '';
         writeRepoHistory('go-files', route, mode);
@@ -720,6 +777,170 @@
     // ---- inline file viewer ----
     const HIGHLIGHT_MAX_BYTES = 200000;   // hljs on very large files janks the page
     let rawFile = null;                   // {name, content} for the View-raw button
+    let fileLineAnchor = 0;
+
+    function parseLineSelection(value) {
+        const rows = new Set();
+        String(value || '').split(',').forEach((part) => {
+            const m = /^(\d+)(?:-(\d+))?$/.exec(part.trim());
+            if (!m)
+                return;
+            const a = Number(m[1]);
+            const b = Number(m[2] || m[1]);
+            const lo = Math.max(1, Math.min(a, b));
+            const hi = Math.max(1, Math.max(a, b));
+            for (let i = lo; i <= hi && rows.size < 1000; i++)
+                rows.add(i);
+        });
+        return rows;
+    }
+
+    function formatLineSelection(rows) {
+        const vals = Array.from(rows || []).map(Number).filter((n) => n > 0).sort((a, b) => a - b);
+        if (!vals.length)
+            return '';
+        const parts = [];
+        let start = vals[0];
+        let prev = vals[0];
+        for (let i = 1; i <= vals.length; i++) {
+            const n = vals[i];
+            if (n === prev + 1) {
+                prev = n;
+                continue;
+            }
+            parts.push(start === prev ? String(start) : start + '-' + prev);
+            start = n;
+            prev = n;
+        }
+        return parts.join(',');
+    }
+
+    function readFileLineSelection() {
+        return parseLineSelection(new URLSearchParams(location.search || '').get(FILE_LINES_PARAM) || '');
+    }
+
+    function writeFileLineSelection(rows) {
+        try {
+            const url = new URL(location.href);
+            const value = formatLineSelection(rows);
+            if (value)
+                url.searchParams.set(FILE_LINES_PARAM, value);
+            else
+                url.searchParams.delete(FILE_LINES_PARAM);
+            const target = url.pathname + url.search + url.hash;
+            const currentUrl = location.pathname + location.search + location.hash;
+            if (target === currentUrl)
+                return;
+            const state = Object.assign({}, history.state || {}, {fileLines: value});
+            history.replaceState(state, '', target);
+        } catch (e) { /* history may be unavailable */ }
+    }
+
+    function lineSelectionRows(host) {
+        return Array.from((host || document).querySelectorAll('.file-line[data-line]'));
+    }
+
+    function syncFileLineSelection(host, rows) {
+        lineSelectionRows(host).forEach((row) => {
+            const selected = rows.has(Number(row.getAttribute('data-line')));
+            row.classList.toggle('is-selected', selected);
+            const btn = row.querySelector('.file-line-no');
+            if (btn)
+                btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+    }
+
+    function scrollFileSelectionIntoView(host, rows) {
+        if (!rows.size)
+            return;
+        const first = Math.min(...rows);
+        const row = host.querySelector('.file-line[data-line="' + first + '"]');
+        if (!row)
+            return;
+        setTimeout(() => {
+            if (document.body.contains(row))
+                row.scrollIntoView({block: 'center', behavior: 'smooth'});
+        }, 30);
+    }
+
+    function highlightFileLine(line, language) {
+        if (!language || typeof hljs === 'undefined')
+            return escapeHtml(line);
+        try {
+            return hljs.highlight(line, {language: language, ignoreIllegals: true}).value;
+        } catch (e) {
+            return escapeHtml(line);
+        }
+    }
+
+    function renderFileLines(text) {
+        const host = document.getElementById('file-lines');
+        if (!host)
+            return;
+        const source = String(text || '');
+        const lines = source.split('\n');
+        let language = '';
+        if (typeof hljs !== 'undefined' && source.length <= HIGHLIGHT_MAX_BYTES) {
+            try {
+                language = hljs.highlightAuto(source).language || '';
+            } catch (e) {
+                language = '';
+            }
+        }
+        host.className = 'file-viewer-code' + (language ? ' hljs language-' + language : '');
+        host.innerHTML = lines.map((line, i) => {
+            const n = i + 1;
+            return '<div class="file-line" data-line="' + n + '">' +
+                '<button type="button" class="file-line-no mono" aria-label="Select line ' + n + '" aria-pressed="false">' + n + '</button>' +
+                '<code class="file-line-code">' + highlightFileLine(line, language) + '</code>' +
+            '</div>';
+        }).join('');
+
+        const selected = readFileLineSelection();
+        fileLineAnchor = selected.size ? Math.min(...selected) : 0;
+        syncFileLineSelection(host, selected);
+        scrollFileSelectionIntoView(host, selected);
+    }
+
+    function renderBinaryFileNotice(size) {
+        const host = document.getElementById('file-lines');
+        if (!host)
+            return;
+        host.className = 'file-viewer-code file-binary-note';
+        host.textContent = 'Binary file (' + fmtSize(size) + ') cannot be displayed inline.';
+    }
+
+    function selectFileLine(btn, event) {
+        const host = document.getElementById('file-lines');
+        const row = btn && btn.closest('.file-line[data-line]');
+        if (!host || !row)
+            return;
+        const lineNo = Number(row.getAttribute('data-line'));
+        if (!lineNo)
+            return;
+        const current = readFileLineSelection();
+        let rows = new Set();
+        if (event.shiftKey && fileLineAnchor) {
+            const lo = Math.min(fileLineAnchor, lineNo);
+            const hi = Math.max(fileLineAnchor, lineNo);
+            rows = (event.metaKey || event.ctrlKey) ? new Set(current) : new Set();
+            for (let i = lo; i <= hi; i++)
+                rows.add(i);
+        } else if (event.metaKey || event.ctrlKey) {
+            rows = new Set(current);
+            if (rows.has(lineNo))
+                rows.delete(lineNo);
+            else
+                rows.add(lineNo);
+            fileLineAnchor = lineNo;
+        } else {
+            rows.add(lineNo);
+            fileLineAnchor = lineNo;
+        }
+        syncFileLineSelection(host, rows);
+        writeFileLineSelection(rows);
+    }
+
     async function openFile(path, name, options = {}) {
         path = normalizeRepoPath(path);
         const res = await Server.call(WS_BROWSE, 'cat', {repoId: repoId, path: path});
@@ -734,7 +955,6 @@
         const title = document.getElementById('file-title');
         const meta = document.getElementById('file-meta');
         const body = document.getElementById('file-viewer-body');
-        const content = document.getElementById('file-content');
         if (title)
             title.textContent = name || basename(path);
         if (meta)
@@ -744,32 +964,31 @@
         if (res.binary) {
             rawFile = null;
             $$('file-raw').disable();
-            if (content) {
-                content.className = '';
-                content.textContent = 'Binary file (' + fmtSize(res.size) + ') cannot be displayed inline.';
-            }
+            renderBinaryFileNotice(res.size);
         } else {
             rawFile = {name: name || basename(path), content: res.content || ''};
             $$('file-raw').enable();
-            let inner;
-            if (typeof hljs !== 'undefined' && (res.content || '').length <= HIGHLIGHT_MAX_BYTES) {
-                try {
-                    inner = hljs.highlightAuto(res.content).value;
-                } catch (e) {
-                    inner = escapeHtml(res.content);
-                }
-            } else {
-                inner = escapeHtml(res.content);
-            }
-            if (content) {
-                content.className = 'hljs';
-                content.innerHTML = inner;
-            }
+            renderFileLines(res.content || '');
         }
         showInlineFile();
         return true;
     }
     $$('file-back').onclick(() => navigateDir(currentPath));
+    document.getElementById('file-lines').addEventListener('click', (e) => {
+        const btn = e.target.closest('.file-line-no');
+        if (!btn)
+            return;
+        selectFileLine(btn, e);
+    });
+    document.getElementById('file-lines').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ')
+            return;
+        const btn = e.target.closest('.file-line-no');
+        if (!btn)
+            return;
+        e.preventDefault();
+        selectFileLine(btn, e);
+    });
     // Open the raw file text in a new tab via a blob URL (no server round trip).
     $$('file-raw').onclick(() => {
         if (!rawFile)
@@ -856,6 +1075,9 @@
                 url.searchParams.set('rev', rev);
             else
                 url.searchParams.delete('rev');
+            url.searchParams.delete('diffFile');
+            url.searchParams.delete('diffRows');
+            url.searchParams.delete(FILE_LINES_PARAM);
             const target = url.pathname + url.search + url.hash;
             const currentUrl = location.pathname + location.search + location.hash;
             if (mode !== 'replace' && target === currentUrl)
@@ -867,19 +1089,13 @@
     }
     function showRevisionFeed() {
         currentRev = 0;
-        const viewer = document.getElementById('rev-viewer');
-        const feedWrap = document.getElementById('rev-feed-wrap');
-        if (viewer)
-            viewer.style.display = 'none';
-        if (feedWrap)
-            feedWrap.style.display = '';
+        SvnHubUI.setPageSlidePage(historySlide, 'feed', {direction: -1});
     }
     async function openRevision(rev, options = {}) {
         currentRev = rev;
         if (options.writeHistory !== false)
             writeRevHistory(rev);
-        document.getElementById('rev-feed-wrap').style.display = 'none';
-        document.getElementById('rev-viewer').style.display = '';
+        SvnHubUI.setPageSlidePage(historySlide, 'detail', {direction: 1});
         document.getElementById('rev-title').textContent = 'Revision ' + rev;
         document.getElementById('rev-meta').textContent = '';
         document.getElementById('rev-message').innerHTML = '';
@@ -900,6 +1116,8 @@
         if (currentRev !== rev || !document.getElementById('rev-diff-host'))
             return;
         SvnHubUI.renderUnifiedDiff(host, res.diff);
+        SvnHubUI.refreshPageSlide(historySlide);
+        SvnHubUI.refreshPageSlide(repoMainSlide);
     }
     $$('rev-back').onclick(() => {
         showRevisionFeed();
@@ -968,7 +1186,6 @@
     const commitsLoad = backgroundLoad('history', loadCommits);
     backgroundLoad('README', loadReadme);
     backgroundLoad('overview', loadAbout);
-    backgroundLoad('contributors', loadAboutContributors);
     if (shouldOpenPendingRevision && !revFromUrl())
         commitsLoad.then(() => focusRevision(pendingRevision));
 
@@ -994,8 +1211,6 @@
         setNavCount('count-mrs', repo.openMergeRequestCount || 0);
         document.getElementById('repo-subhead').textContent = repo.description || '';
         setFact('fact-head', 'r' + (repo.headRevision || 0));
-        setFact('fact-issues', repo.openIssueCount || 0);
-        setFact('fact-mrs', repo.openMergeRequestCount || 0);
         setFact('fact-created', fmtDate(repo.createdTs));
         renderCrumb();
     }
@@ -1003,8 +1218,9 @@
     // ---- manage repository (edit metadata / access) — repo admins only ----
     const currentRepo = (repoRes._Success && repoRes.repo) ? repoRes.repo : null;
     const canAdminRepo = !!(repoRes._Success && repoRes.access && repoRes.access.admin);
-    if (canAdminRepo && currentRepo)
-        document.getElementById('repo-header-actions').hidden = false;
+    const repoSettingsMenu = document.getElementById('repo-settings-menu');
+    if (repoSettingsMenu)
+        repoSettingsMenu.hidden = !(canAdminRepo && currentRepo);
 
     const reErr = document.getElementById('re-name-err');
     function showEditRepoError(msg) {
@@ -1075,7 +1291,6 @@
         $$('repo-visibility').setValue(visibility);
         document.getElementById('repo-subhead').textContent = description || '';
     }
-    $$('repo-edit-btn').onclick(openEditRepo);
     $$('re-cancel').onclick(() => Utils.popup_close());
     $$('re-submit').onclick(submitEditRepo);
     $$('re-name').onEnter(submitEditRepo);
@@ -1124,6 +1339,9 @@
             rdLoading.hidden = !deletePending;
         $$('rd-confirm').enable(!deletePending);
         $$('rd-cancel').enable(!deletePending);
+        const rdClose = document.querySelector('#repo-delete-popup [data-popup-close]');
+        if (rdClose)
+            rdClose.disabled = deletePending;
         if (deletePending) {
             showDeleteRepoError('');
             $$('rd-submit').setValue('Deleting...').disable();
@@ -1184,7 +1402,6 @@
         SvnHubUI.routeTarget(dashboardTarget);
     }
 
-    $$('repo-delete-btn').onclick(openDeleteRepo);
     $$('rd-cancel').onclick(() => Utils.popup_close());
     $$('rd-submit').onclick(submitDeleteRepo);
     $$('rd-confirm').onEnter(submitDeleteRepo);
@@ -1192,14 +1409,19 @@
 
     // ---- access management -------------------------------------------------
     // A two-pane popup: the list of people with access, and an add/edit pane
-    // that slides in (login-page style). The user picker is a type-ahead search
-    // over all active users, so it stays usable with thousands of accounts.
+    // that slides in (login-page style). The user picker searches active users
+    // on the server in pages, so it stays usable with thousands of accounts.
     const ACC_AVATARS = ['#1f5d57', '#809cc9', '#5768a4', '#6b2c4e', '#3a4f86', '#c08a1a', '#2c7a72'];
-    let accUsers = [];          // every active user: {userId, userName, fullName}
+    const ACC_SEARCH_PAGE_SIZE = 20;
     let accRows = [];           // current grants (rows from getAccess)
     let accGrantByUser = {};    // userId -> grant row
     let accChosen = null;       // user selected in the add/edit pane
     let accEditing = false;     // true when opened from an existing grant
+    let accSearchRows = [];
+    let accSearchTotal = 0;
+    let accSearchPage = 0;
+    let accSearchQuery = '';
+    let accSearchRunner = null;
 
     function accAvatar(userId, name) {
         const color = ACC_AVATARS[Math.abs(Number(userId) || 0) % ACC_AVATARS.length];
@@ -1249,7 +1471,6 @@
         if (!res._Success)
             return false;
         accRows = res.rows || [];
-        accUsers = res.availableUsers || [];
         accGrantByUser = {};
         accRows.forEach((r) => {
             accGrantByUser[r.userId] = r;
@@ -1278,7 +1499,7 @@
             perms.hidden = true;
             actions.hidden = true;
             document.getElementById('acc-search').value = '';
-            renderAccSearchResults('');
+            clearAccSearch();
             document.getElementById('acc-edit-title').textContent = 'Add a user';
             $$('acc-remove').hide(true);
             $$('acc-read').setValue(true);
@@ -1307,30 +1528,40 @@
         $$('acc-grant').setValue(g ? 'Save changes' : 'Grant access');
     }
 
-    function renderAccSearchResults(q) {
+    function clearAccSearch(cancel = true) {
+        if (cancel && accSearchRunner)
+            accSearchRunner.cancel();
+        accSearchRows = [];
+        accSearchTotal = 0;
+        accSearchPage = 0;
+        accSearchQuery = '';
         const host = document.getElementById('acc-results');
-        const query = (q || '').trim().toLowerCase();
+        host.innerHTML = '';
+        host.hidden = true;
+    }
+
+    function renderAccSearchResults(q, loading = false, errorText = '') {
+        const host = document.getElementById('acc-results');
+        const query = (q || '').trim();
         if (!query) {
             host.innerHTML = '';
             host.hidden = true;
             return;
         }
         host.hidden = false;
-        const matches = [];
-        for (const u of accUsers) {
-            if ((u.userName || '').toLowerCase().includes(query) ||
-                (u.fullName || '').toLowerCase().includes(query)) {
-                matches.push(u);
-                if (matches.length > 30)
-                    break;
-            }
+        if (loading && !accSearchRows.length) {
+            host.innerHTML = '<p class="muted acc-results-hint">Searching...</p>';
+            return;
         }
-        if (!matches.length) {
+        if (errorText) {
+            host.innerHTML = '<p class="muted acc-results-hint">' + escapeHtml(errorText) + '</p>';
+            return;
+        }
+        if (!accSearchRows.length) {
             host.innerHTML = '<p class="muted acc-results-hint">No users match "' + escapeHtml(q) + '".</p>';
             return;
         }
-        const shown = matches.slice(0, 30);
-        let html = shown.map((u) => {
+        let html = accSearchRows.map((u) => {
             const has = !!accGrantByUser[u.userId];
             return '<button type="button" class="acc-result" data-user-id="' + u.userId + '">' +
                 accAvatar(u.userId, u.fullName || u.userName) +
@@ -1341,10 +1572,67 @@
                 (has ? '<span class="acc-chip read acc-result-has">has access</span>' : '') +
             '</button>';
         }).join('');
-        if (matches.length > 30)
-            html += '<p class="muted acc-results-hint">More matches found. Refine the search and press Enter again.</p>';
+        if (accSearchRows.length < accSearchTotal) {
+            html += '<button type="button" class="acc-results-more" data-load-more="true">' +
+                'Load more <span>Showing ' + accSearchRows.length + ' of ' + accSearchTotal + '</span>' +
+            '</button>';
+        } else if (accSearchTotal > ACC_SEARCH_PAGE_SIZE) {
+            html += '<p class="muted acc-results-hint">Showing all ' + accSearchTotal + ' matches.</p>';
+        }
         host.innerHTML = html;
     }
+
+    async function runAccSearch(q, page = 0, append = false, token = null) {
+        const query = (q || '').trim();
+        if (!query) {
+            clearAccSearch();
+            return;
+        }
+        if (token == null)
+            token = accSearchRunner.cancel();
+        accSearchQuery = query;
+        if (!append) {
+            accSearchRows = [];
+            accSearchTotal = 0;
+            accSearchPage = 0;
+        }
+        renderAccSearchResults(query, true);
+        const res = await Server.callQuiet(WS_ACC, 'searchUsers', {
+            repoId: repoId,
+            query: query,
+            page: page,
+            pageSize: ACC_SEARCH_PAGE_SIZE
+        });
+        if (!accSearchRunner.isCurrent(token))
+            return;
+        if (!res._Success) {
+            renderAccSearchResults(query, false, 'Unable to search users right now.');
+            return;
+        }
+        const rows = res.rows || [];
+        accSearchRows = append ? accSearchRows.concat(rows) : rows;
+        accSearchTotal = Number(res.total) || accSearchRows.length;
+        accSearchPage = Number(res.page) || page;
+        renderAccSearchResults(query);
+    }
+
+    function scheduleAccSearch(q) {
+        const query = (q || '').trim();
+        if (!query) {
+            clearAccSearch();
+            return;
+        }
+        accSearchQuery = query;
+        accSearchRows = [];
+        accSearchTotal = 0;
+        accSearchPage = 0;
+        renderAccSearchResults(query, true);
+        accSearchRunner.schedule();
+    }
+
+    accSearchRunner = SvnHubUI.createDebouncedRunner((token) => {
+        runAccSearch(accSearchQuery, 0, false, token);
+    }, 220);
 
     function openAccessEditor(grantRow) {
         accEditing = !!grantRow;
@@ -1369,8 +1657,14 @@
         await loadAccess();
     }
 
-    $$('repo-access-btn').onclick(openAccess);
-    document.getElementById('acc-modal-close').addEventListener('click', () => Utils.popup_close());
+    $$('repo-settings-menu').onSelect((value) => {
+        if (value === 'edit')
+            openEditRepo();
+        else if (value === 'access')
+            openAccess();
+        else if (value === 'delete')
+            openDeleteRepo();
+    });
     $$('acc-close').onclick(() => Utils.popup_close());
     document.getElementById('acc-add-btn').addEventListener('click', () => openAccessEditor(null));
     document.getElementById('acc-back').addEventListener('click', () => showAccPane('list'));
@@ -1408,19 +1702,27 @@
             openAccessEditor(accGrantByUser[Number(person.getAttribute('data-user-id'))]);
     });
 
-    // Search when the user explicitly submits the query.
-    document.getElementById('acc-search').addEventListener('keydown', (e) => {
+    const accSearchInput = document.getElementById('acc-search');
+    accSearchInput.addEventListener('input', (e) => {
+        scheduleAccSearch(e.target.value);
+    });
+    accSearchInput.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter')
             return;
         e.preventDefault();
-        renderAccSearchResults(e.target.value);
+        runAccSearch(e.target.value, 0, false);
     });
     document.getElementById('acc-results').addEventListener('click', (e) => {
+        const more = e.target.closest('.acc-results-more');
+        if (more) {
+            runAccSearch(accSearchQuery, accSearchPage + 1, true);
+            return;
+        }
         const btn = e.target.closest('.acc-result');
         if (!btn)
             return;
         const uid = Number(btn.getAttribute('data-user-id'));
-        const u = accUsers.find((x) => Number(x.userId) === uid);
+        const u = accSearchRows.find((x) => Number(x.userId) === uid);
         if (u)
             setChosenUser(u);
     });

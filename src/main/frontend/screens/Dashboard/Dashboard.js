@@ -315,20 +315,25 @@
     function makeProfileLink(el, label) {
         if (!el)
             return;
+        const isButton = el.tagName === 'BUTTON';
         el.classList.add('is-clickable');
-        el.setAttribute('role', 'link');
-        el.setAttribute('tabindex', '0');
-        el.setAttribute('title', label);
+        if (!isButton) {
+            el.setAttribute('role', 'link');
+            el.setAttribute('tabindex', '0');
+        }
+        el.setAttribute('data-tooltip', label);
+        el.removeAttribute('title');
         el.addEventListener('click', openOwnProfile);
-        el.addEventListener('keydown', function (evt) {
-            if (evt.key === 'Enter' || evt.key === ' ') {
-                evt.preventDefault();
-                openOwnProfile();
-            }
-        });
+        if (!isButton)
+            el.addEventListener('keydown', function (evt) {
+                if (evt.key === 'Enter' || evt.key === ' ') {
+                    evt.preventDefault();
+                    openOwnProfile();
+                }
+            });
     }
     makeProfileLink(document.getElementById('repo-prof-avatar'), 'View my profile');
-    makeProfileLink(document.getElementById('repo-prof-handle-line'), 'View my profile');
+    makeProfileLink(document.getElementById('repo-prof-handle-link'), 'View my profile');
     function handleCardListKeydown(evt) {
         if (evt.key !== 'Enter')
             return;
