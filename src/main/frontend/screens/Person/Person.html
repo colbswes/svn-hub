@@ -44,13 +44,13 @@
                 <div class="profile-id-text">
                     <div class="person-name-row">
                         <h1 id="person-name">Person</h1>
-                        <button type="button" id="person-name-edit" class="person-name-edit" hidden aria-label="Edit name" title="Edit name">
+                        <button type="button" id="person-name-edit" class="person-name-edit" hidden aria-label="Edit name">
                             <span class="person-name-edit-icons t-icon-swap" data-state="a" aria-hidden="true">
                                 <svg class="person-name-edit-icon t-icon" data-icon="a" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5l2.35-.48 7.08-7.08a1.35 1.35 0 0 0 0-1.91l-.46-.46a1.35 1.35 0 0 0-1.91 0L2.98 9.65 2.5 12a.42.42 0 0 0 .5.5Z"/><path d="m9.25 3.38 3.37 3.37"/></svg>
                                 <svg class="person-name-edit-icon t-icon" data-icon="b" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4.5 4.5 7 7"/><path d="m11.5 4.5-7 7"/></svg>
                             </span>
                         </button>
-                        <button type="button" id="person-name-save" class="person-name-save" hidden aria-label="Save name" title="Save name">
+                        <button type="button" id="person-name-save" class="person-name-save" hidden aria-label="Save name">
                             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3.25 8.35 3.1 3.15 6.4-7"/></svg>
                         </button>
                     </div>
@@ -78,9 +78,7 @@
             <aside class="side-rail person-rail">
                 <section class="card card-pad">
                     <div class="eyebrow">Profile</div>
-                    <dl class="fact-list person-facts">
-                        <div class="fact"><dt>Last commit</dt><dd id="person-fact-last">–</dd></div>
-                    </dl>
+                    <dl class="fact-list person-facts" id="person-facts"></dl>
                 </section>
                 <section class="card card-pad" id="person-top-repos-card">
                     <div class="eyebrow">Most active in</div>
@@ -89,6 +87,14 @@
             </aside>
 
             <main class="person-main">
+                <section class="card card-pad person-empty-all" id="person-empty-all" hidden>
+                    <div class="person-empty-all-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/></svg>
+                    </div>
+                    <h2 id="person-empty-all-title">Nothing published yet</h2>
+                    <p class="muted" id="person-empty-all-body">This person hasn't published any repositories or commit activity yet.</p>
+                </section>
+
                 <section class="card card-pad ins-section person-expand-section" data-section="repositories">
                     <button type="button" class="ins-section-head person-expand-head" aria-expanded="true" aria-controls="person-repositories-body">
                         <span class="ins-section-caret" aria-hidden="true"></span>

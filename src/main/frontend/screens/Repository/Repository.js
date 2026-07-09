@@ -286,6 +286,13 @@
         writeRepoHistory(menuId);
         await applyView(menuId);
     }
+    async function selectFilesRoot() {
+        const route = {path: '', filePath: '', direction: -1};
+        currentPath = '';
+        currentFilePath = '';
+        writeRepoHistory('go-files', route);
+        await applyView('go-files', route);
+    }
 
     // Restore the section on Back/Forward. Only one such handler is ever registered
     // (each repo-page load removes the previous one first).
@@ -317,7 +324,7 @@
     window.addEventListener('popstate', repoSectionPopstate);
 
     menuEl('go-history').addEventListener('click', () => selectView('go-history'));
-    menuEl('go-files').addEventListener('click', () => selectView('go-files'));
+    menuEl('go-files').addEventListener('click', selectFilesRoot);
     menuEl('go-issues').addEventListener('click', () => selectView('go-issues'));
     menuEl('go-mrs').addEventListener('click', () => selectView('go-mrs'));
     menuEl('go-insights').addEventListener('click', () => {
@@ -1021,15 +1028,18 @@
         const feed = document.getElementById('revision-feed');
         const res = await Server.call(WS_HIST, 'log', {repoId: repoId, path: '', limit: 40, withPaths: true});
         if (!res._Success) {
+            feed.classList.add('is-empty');
             feed.innerHTML = '<p class="muted">No history available.</p>';
             return;
         }
         const commits = res.commits.filter((c) => c.revision > 0);
         $$('rev-count').setValue(commits.length + (commits.length === 1 ? ' revision' : ' revisions'));
         if (!commits.length) {
+            feed.classList.add('is-empty');
             feed.innerHTML = '<p class="muted">No revisions yet.</p>';
             return;
         }
+        feed.classList.remove('is-empty');
         feed.innerHTML = commits.map((c) => {
             const badges = pathBadges(c.paths);
             return '<div class="rev-node" data-rev="' + c.revision + '" tabindex="0">' +
@@ -1461,7 +1471,7 @@
                 '</div>' +
                 '<div class="acc-person-chips">' + accPermChips(r) + '</div>' +
                 '<button type="button" class="acc-person-remove" data-remove="' + r.userId + '" ' +
-                    'title="Remove access" aria-label="Remove access for ' + escapeHtml(r.userName) + '">&times;</button>' +
+                    'aria-label="Remove access for ' + escapeHtml(r.userName) + '">&times;</button>' +
             '</div>';
         }).join('');
     }

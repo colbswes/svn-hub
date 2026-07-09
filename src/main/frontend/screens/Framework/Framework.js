@@ -41,7 +41,6 @@
         appNav.classList.toggle('menu-open', shouldOpen);
         mobileNavToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
         mobileNavToggle.setAttribute('aria-label', shouldOpen ? 'Close navigation' : 'Open navigation');
-        mobileNavToggle.title = shouldOpen ? 'Close menu' : 'Menu';
         syncMobileNavAccessibility(shouldOpen);
         window.requestAnimationFrame(updateActiveNavPill);
     }
@@ -463,13 +462,13 @@
         navResults.classList.add('open');
     }
     function defaultNavLabel() {
-        return guest ? 'Public repositories' : 'Your repositories';
+        return 'Your repositories';
     }
     function loadDefaultNavRows() {
+        if (guest)
+            return Promise.resolve([]);
         if (!navDefaultPromise) {
-            navDefaultPromise = (guest
-                ? Server.callQuiet('services/DiscoverService', 'searchRepos', {query: '', page: 0, pageSize: 12})
-                : Server.callQuiet('services/RepositoryService', 'getRepositories'))
+            navDefaultPromise = Server.callQuiet('services/RepositoryService', 'getRepositories')
                 .then((res) => {
                     navDefaultRows = (res._Success && res.rows) ? limitedRows(res.rows, 12) : [];
                     return navDefaultRows;
@@ -484,6 +483,10 @@
         const q = navSearchCtl.getValue().trim();
         if (q) {
             runNavSearch();
+            return;
+        }
+        if (guest) {
+            hideNavResults();
             return;
         }
         if (navDefaultRows) {

@@ -21,18 +21,34 @@
     let searchRunner = null;
     let hasSearched = false;
     let browseMode = false;
+    let selectedPersonHandle = '';
+    // Per-handle cache of getPersonDetail responses so re-selecting a person is
+    // instant. Value is either the detail object, or the string 'loading'.
+    const personDetailCache = {};
+    let detailRequestToken = 0;
+    const DETAIL_ACTIVITY_LIMIT = 4;
 
     const searchPlaceholders = {
         all: 'Search repositories and people by name, description, or key',
         repos: 'Search repositories by name, description, or key',
         people: 'Search people by name or username'
     };
+    const masterDetailQuery = window.matchMedia ? window.matchMedia('(min-width: 961px)') : null;
 
-    const exploreOrigin = {
-        page: 'screens/Discover/Discover',
-        nav: 'discover',
-        data: {}
-    };
+    // Build a "return to Explore" target that restores the current filter and
+    // search term, so hitting Back on a profile/repo lands the user back where
+    // they were (for example, still on the People tab with their query).
+    function exploreOrigin() {
+        const data = {discoverFilter: filter};
+        const q = ($$('disc-search').getValue() || '').trim();
+        if (q)
+            data.discoverQuery = q;
+        return {
+            page: 'screens/Discover/Discover',
+            nav: 'discover',
+            data: data
+        };
+    }
 
     function esc(s) {
         const d = document.createElement('div');
@@ -52,7 +68,9 @@
         const handle = u.handle || '';
         const name = u.fullName || handle || 'Person';
         const count = Number(u.publicRepoCount || 0);
-        return '<button class="person-card" data-handle="' + esc(handle) + '">' +
+        const selected = showPeopleMasterDetail() && handle && handle === selectedPersonHandle;
+        return '<button class="person-card' + (selected ? ' selected' : '') + '" data-handle="' + esc(handle) +
+            '"' + (selected ? ' aria-pressed="true"' : '') + '>' +
             '<span class="person-card-avatar" aria-hidden="true">' + esc((handle || name || '?').charAt(0).toUpperCase()) + '</span>' +
             '<span class="person-card-main">' +
                 '<span class="person-card-name">' + esc(name) + '</span>' +
@@ -63,6 +81,225 @@
                 '<span>' + esc(count === 1 ? 'public repo' : 'public repos') + '</span>' +
             '</span>' +
         '</button>';
+    }
+
+    function showPeopleMasterDetail() {
+        return filter === 'people' && (!masterDetailQuery || masterDetailQuery.matches);
+    }
+
+    function selectedPerson(rows) {
+        if (!selectedPersonHandle)
+            return null;
+        const person = rows.find((u) => (u.handle || '') === selectedPersonHandle) || null;
+        if (!person)
+            selectedPersonHandle = '';
+        return person;
+    }
+
+    // Kick off (or reuse a cached) getPersonDetail load for a handle. Re-renders
+    // the panel when the response lands, but only if this handle is still the
+    // selected one (guards against rapid selection changes).
+    function fetchPersonDetail(handle) {
+        if (!handle || personDetailCache[handle])
+            return;
+        personDetailCache[handle] = 'loading';
+        const token = ++detailRequestToken;
+        Server.callQuiet(WS, 'getPersonDetail',
+            {handle: handle, page: 0, pageSize: 6, activityLimit: DETAIL_ACTIVITY_LIMIT})
+            .then((res) => {
+                personDetailCache[handle] = (res && res._Success) ? res : {_error: true};
+                if (token === detailRequestToken && selectedPersonHandle === handle)
+                    renderAll();
+            })
+            .catch(() => {
+                personDetailCache[handle] = {_error: true};
+                if (token === detailRequestToken && selectedPersonHandle === handle)
+                    renderAll();
+            });
+    }
+
+    function fmtDate(ms) {
+        return SvnHubUI.fmtDate(ms);
+    }
+
+    // The header block (avatar / name / handle / member-since / view profile).
+    function detailHead(handle, name, profile) {
+        const initials = SvnHubUI.personInitials(name || handle);
+        const since = profile && profile.memberSince
+            ? 'Member since ' + esc(fmtDate(profile.memberSince))
+            : 'Member profile';
+        return '<div class="people-detail-head">' +
+            '<div class="people-detail-avatar" aria-hidden="true">' + esc(initials) + '</div>' +
+            '<div class="people-detail-copy">' +
+                '<h2>' + esc(name) + '</h2>' +
+                '<div class="people-detail-handle mono">@' + esc(handle) + '</div>' +
+                '<div class="people-detail-since">' + since + '</div>' +
+            '</div>' +
+            '<button type="button" class="people-detail-open" data-open-selected-person="' + esc(handle) + '">View profile &rarr;</button>' +
+        '</div>';
+    }
+
+    // A three-up stat strip using the shared profile-stat block styling.
+    function detailStats(stats, fallbackCount) {
+        const repoCount = Number((stats && stats.visibleRepoCount) || fallbackCount || 0);
+        const revisions = Number((stats && stats.visibleRevisionCount) || 0);
+        const commits = Number((stats && stats.commitCount) || 0);
+        return '<div class="people-detail-statgrid">' +
+            SvnHubUI.statBlock(repoCount, repoCount === 1 ? 'repository' : 'repositories') +
+            SvnHubUI.statBlock(revisions, revisions === 1 ? 'revision' : 'revisions') +
+            SvnHubUI.statBlock(commits, commits === 1 ? 'commit' : 'commits') +
+        '</div>';
+    }
+
+    // Recent commit activity list (compact). rows: activity[] from getPersonDetail.
+    function detailActivity(rows) {
+        rows = rows || [];
+        if (!rows.length)
+            return '';
+        const items = rows.slice(0, DETAIL_ACTIVITY_LIMIT).map((r) => {
+            const label = r.repoName || r.repoKey || 'repository';
+            const when = r.commitTs
+                ? '<span class="people-act-when" title="' + esc(fmtDate(r.commitTs)) + '">' + esc(SvnHubUI.relTime(r.commitTs)) + '</span>'
+                : '';
+            const msg = (r.message || '').split('\n')[0].trim() || '(no message)';
+            return '<li class="people-act" tabindex="0" data-repo-id="' + esc(r.repoId) +
+                '" data-repo-key="' + esc(r.repoKey || '') + '" data-repo-name="' + esc(r.repoName || '') +
+                '" data-rev="' + esc(r.revision || 0) + '">' +
+                '<span class="people-act-rev mono">r' + esc(r.revision || 0) + '</span>' +
+                '<span class="people-act-body">' +
+                    '<span class="people-act-msg">' + esc(msg) + '</span>' +
+                    '<span class="people-act-meta"><span class="people-act-repo">' + esc(label) + '</span>' + when + '</span>' +
+                '</span>' +
+            '</li>';
+        }).join('');
+        return '<section class="people-detail-block">' +
+            '<h3 class="people-detail-block-title">Recent activity</h3>' +
+            '<ul class="people-act-list">' + items + '</ul>' +
+        '</section>';
+    }
+
+    // The body shown once a person's detail has loaded (or while still loading,
+    // using whatever the search row already told us).
+    function detailBody(person) {
+        const handle = person.handle || '';
+        const name = person.fullName || handle || 'Person';
+        const fallbackCount = Number(person.publicRepoCount || 0);
+        const cached = personDetailCache[handle];
+
+        // Trigger the detail load lazily on first render for this handle.
+        if (!cached)
+            fetchPersonDetail(handle);
+
+        const detail = (cached && cached !== 'loading' && !cached._error) ? cached : null;
+        const profile = detail ? (detail.profile || {}) : {};
+        const stats = detail ? (detail.stats || {}) : null;
+        const displayName = profile.fullName || name;
+
+        let html = detailHead(handle, displayName, profile);
+        html += detailStats(stats, fallbackCount);
+
+        if (cached === 'loading' || !cached) {
+            html += '<div class="people-detail-loading">' + SvnHubUI.spinner('Loading profile…') + '</div>';
+            return html;
+        }
+
+        if (cached._error) {
+            html += '<p class="people-detail-note">Couldn\u2019t load this profile right now. Open it to try again.</p>';
+            return html;
+        }
+
+        const weekly = detail.weeklyActivity || [];
+        const topRepos = detail.topRepos || [];
+        const activity = detail.activity || [];
+        let hasContent = false;
+
+        const sparkHtml = SvnHubUI.weeklySpark(weekly);
+        if (sparkHtml) {
+            hasContent = true;
+            html += '<section class="people-detail-block">' +
+                '<h3 class="people-detail-block-title">Commit activity <span class="people-detail-block-note">last 26 weeks</span></h3>' +
+                sparkHtml +
+            '</section>';
+        }
+
+        if (topRepos.length) {
+            hasContent = true;
+            html += '<section class="people-detail-block">' +
+                '<h3 class="people-detail-block-title">Most active in</h3>' +
+                SvnHubUI.topReposList(topRepos.slice(0, 4)) +
+            '</section>';
+        }
+
+        const activityHtml = detailActivity(activity);
+        if (activityHtml) {
+            hasContent = true;
+            html += activityHtml;
+        }
+
+        if (!hasContent) {
+            html += '<p class="people-detail-note">' + esc(profile.viewerCanSeePrivate
+                ? 'No visible repositories or commit activity yet.'
+                : 'No public repositories or commit activity yet.') + '</p>';
+        }
+        return html;
+    }
+
+    // Re-trigger the enter animation on an element by removing the class,
+    // forcing a reflow, then re-adding it. Transform/opacity only — no layout.
+    function replayAnim(el, cls) {
+        if (!el)
+            return;
+        el.classList.remove(cls);
+        // eslint-disable-next-line no-unused-expressions
+        void el.offsetWidth;
+        el.classList.add(cls);
+    }
+
+    // Track what the detail panel last showed so we only animate on a real
+    // change of selection/state, not on every incidental re-render (search
+    // keystrokes, viewport changes, etc.).
+    let lastDetailKey = null;
+
+    function renderPeopleDetail(rows) {
+        const panel = document.getElementById('people-detail');
+        if (!panel)
+            return;
+        if (!showPeopleMasterDetail() || !rows.length) {
+            panel.hidden = true;
+            panel.classList.remove('is-empty');
+            panel.innerHTML = '';
+            lastDetailKey = null;
+            return;
+        }
+
+        const person = selectedPerson(rows);
+        if (!person) {
+            const key = 'empty';
+            panel.hidden = false;
+            panel.classList.add('is-empty');
+            panel.innerHTML =
+                '<div class="people-detail-empty-icon" aria-hidden="true">@</div>' +
+                '<div class="people-detail-copy">' +
+                    '<h2>Select someone</h2>' +
+                    '<div class="people-detail-handle">Choose a person from the list to see their repositories and activity.</div>' +
+                '</div>';
+            if (key !== lastDetailKey)
+                replayAnim(panel, 'is-entering');
+            lastDetailKey = key;
+            return;
+        }
+
+        const handle = person.handle || '';
+        const cached = personDetailCache[handle];
+        // Distinguish the loading vs loaded render for the same person so the
+        // content fades in once when the real detail arrives, too.
+        const key = 'p:' + handle + ':' + (cached && cached !== 'loading' ? 'full' : 'lite');
+        panel.hidden = false;
+        panel.classList.remove('is-empty');
+        panel.innerHTML = detailBody(person);
+        if (key !== lastDetailKey)
+            replayAnim(panel, 'is-entering');
+        lastDetailKey = key;
     }
 
     function syncSearchClear() {
@@ -109,6 +346,14 @@
         '</button>';
     }
 
+    function syncResultHeader(panel) {
+        const head = panel.querySelector('.discover-result-head');
+        const filtered = filter !== 'all';
+        panel.classList.toggle('is-filtered', filtered);
+        if (head)
+            head.hidden = filtered;
+    }
+
     function renderRepos() {
         if (!hasSearched && !browseMode)
             return 0;
@@ -122,6 +367,7 @@
             hostPanel.hidden = true;
             return 0;
         }
+        syncResultHeader(hostPanel);
 
         const rows = applyRepoSort(allRepos);
 
@@ -155,10 +401,13 @@
 
         if (!showPeople) {
             hostPanel.hidden = true;
+            renderPeopleDetail([]);
             return 0;
         }
+        syncResultHeader(hostPanel);
 
         const rows = applyPeopleSort(allPeople);
+        hostPanel.classList.toggle('is-master', showPeopleMasterDetail() && rows.length > 0);
 
         document.getElementById('people-title').textContent = 'People';
         document.getElementById('people-subtitle').textContent = term
@@ -169,11 +418,13 @@
         hostPanel.hidden = rows.length === 0;
         if (!rows.length) {
             host.innerHTML = '';
+            renderPeopleDetail([]);
             return 0;
         }
 
         host.innerHTML = rows.map(personCard).join('') +
             (hasSearched ? loadMoreButton('people', allPeople.length, peopleTotal, 'people') : '');
+        renderPeopleDetail(rows);
         return rows.length;
     }
 
@@ -253,12 +504,20 @@
         });
     }
 
-    function syncUrlQuery(q) {
+    function validFilter(mode) {
+        return mode === 'repos' || mode === 'people' || mode === 'all';
+    }
+
+    function syncUrlState(q) {
         const url = new URL(location.href);
         if (q)
             url.searchParams.set('q', q);
         else
             url.searchParams.delete('q');
+        if (filter && filter !== 'all')
+            url.searchParams.set('filter', filter);
+        else
+            url.searchParams.delete('filter');
         const next = url.pathname + url.search + url.hash;
         if (next !== location.pathname + location.search + location.hash)
             history.replaceState(history.state, document.title, next);
@@ -275,7 +534,7 @@
         repoTerm = q;
         peopleTerm = q;
         syncSearchClear();
-        syncUrlQuery(q);
+        syncUrlState(q);
 
         repoPage = 0;
         peoplePage = 0;
@@ -376,12 +635,16 @@
         peopleTerm = '';
         syncSearchClear();
         hasSearched = false;
-        syncUrlQuery('');
+        syncUrlState('');
         await loadBrowse();
     }
 
-    function setFilter(mode) {
+    function setFilter(mode, opts) {
+        opts = opts || {};
         filter = mode;
+        const list = document.getElementById('filter-list');
+        if (list && opts.instant)
+            list.classList.add('no-animate');
         [['all', 'filter-all'], ['repos', 'filter-repos'], ['people', 'filter-people']]
             .forEach((p) => {
                 const el = $$(p[1]).element;
@@ -389,13 +652,13 @@
                 el.classList.toggle('active', on);
                 el.setAttribute('aria-selected', on ? 'true' : 'false');
             });
-        const list = document.getElementById('filter-list');
         if (list)
             list.setAttribute('data-filter', filter);
         syncSearchPlaceholder();
-        if (repoServerSearchActive)
-            Utils.saveData('discoverFilter', filter);
+        syncUrlState($$('disc-search').getValue().trim());
         renderAll();
+        if (list && opts.instant)
+            requestAnimationFrame(() => list.classList.remove('no-animate'));
     }
 
     function repoFromCard(card) {
@@ -427,19 +690,19 @@
         const owner = e.target.closest('.repo-owner-link');
         if (owner) {
             e.stopPropagation();
-            SvnHubUI.openPerson(owner.getAttribute('data-person-handle'), exploreOrigin);
+            SvnHubUI.openPerson(owner.getAttribute('data-person-handle'), exploreOrigin());
             return;
         }
         const card = e.target.closest('.repo-card');
         if (card)
-            SvnHubUI.openRepo(repoFromCard(card), exploreOrigin);
+            SvnHubUI.openRepo(repoFromCard(card), exploreOrigin());
     });
     document.getElementById('repo-results').addEventListener('keydown', (e) => {
         if (e.key !== 'Enter')
             return;
         const card = e.target.closest('.repo-card');
         if (card)
-            SvnHubUI.openRepo(repoFromCard(card), exploreOrigin);
+            SvnHubUI.openRepo(repoFromCard(card), exploreOrigin());
     });
     document.getElementById('people-results').addEventListener('click', (e) => {
         const more = e.target.closest('[data-load-more="people"]');
@@ -448,22 +711,57 @@
             return;
         }
         const card = e.target.closest('.person-card');
-        if (card)
-            SvnHubUI.openPerson(card.getAttribute('data-handle'), exploreOrigin);
+        if (!card)
+            return;
+        const handle = card.getAttribute('data-handle');
+        if (showPeopleMasterDetail()) {
+            selectedPersonHandle = handle;
+            renderAll();
+            return;
+        }
+        SvnHubUI.openPerson(handle, exploreOrigin());
     });
+    document.getElementById('people-detail').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-open-selected-person]');
+        if (btn) {
+            SvnHubUI.openPerson(btn.getAttribute('data-open-selected-person'), exploreOrigin());
+            return;
+        }
+        const repoItem = e.target.closest('.top-repo, .people-act');
+        if (repoItem)
+            SvnHubUI.openRepo(repoFromCard(repoItem), exploreOrigin());
+    });
+    document.getElementById('people-detail').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ')
+            return;
+        const repoItem = e.target.closest('.top-repo, .people-act');
+        if (repoItem) {
+            e.preventDefault();
+            SvnHubUI.openRepo(repoFromCard(repoItem), exploreOrigin());
+        }
+    });
+    if (masterDetailQuery) {
+        const rerenderForViewport = () => renderAll();
+        if (masterDetailQuery.addEventListener)
+            masterDetailQuery.addEventListener('change', rerenderForViewport);
+        else if (masterDetailQuery.addListener)
+            masterDetailQuery.addListener(rerenderForViewport);
+    }
 
     initDiscoverSections();
 
     if (Utils.setAppNavActive)
         Utils.setAppNavActive('discover', 'screens/Discover/Discover');
 
-    const pendingFilter = Utils.getAndEraseData('discoverFilter');
-    const urlQuery = (new URLSearchParams(location.search || '').get('q') || '').trim();
+    const urlParams = new URLSearchParams(location.search || '');
+    const urlFilter = urlParams.get('filter') || '';
+    const pendingFilter = urlFilter || Utils.getAndEraseData('discoverFilter');
+    const urlQuery = (urlParams.get('q') || '').trim();
     const dataQuery = (Utils.getAndEraseData('discoverQuery') || '').trim();
     const pendingQuery = urlQuery || dataQuery;
-    if (pendingFilter === 'repos' || pendingFilter === 'people' || pendingFilter === 'all')
+    if (validFilter(pendingFilter))
         filter = pendingFilter;
-    setFilter(filter);
+    setFilter(filter, {instant: true});
     if (pendingQuery)
         $$('disc-search').setValue(pendingQuery);
     syncSearchClear();

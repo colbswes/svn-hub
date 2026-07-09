@@ -295,13 +295,33 @@
         SvnHubUI.statBlock(repoCount, 'repositories') +
         SvnHubUI.statBlock(revisions, 'revisions') +
         SvnHubUI.statBlock(commits, 'commits');
-    document.getElementById('person-fact-last').textContent = stats.lastCommitTs ? SvnHubUI.relTime(stats.lastCommitTs) : '–';
-    document.getElementById('person-fact-last').setAttribute('title', fmtDate(stats.lastCommitTs));
+    // Profile rail facts (item: side-rail "Profile" card). Each fact carries a
+    // title tooltip with the exact value where the display value is relative or
+    // abbreviated.
+    function factRow(label, value, title) {
+        const dd = title
+            ? '<dd title="' + esc(title) + '">' + esc(value) + '</dd>'
+            : '<dd>' + esc(value) + '</dd>';
+        return '<div class="fact"><dt>' + esc(label) + '</dt>' + dd + '</div>';
+    }
+    const lastCommit = stats.lastCommitTs
+        ? {value: SvnHubUI.relTime(stats.lastCommitTs), title: fmtDate(stats.lastCommitTs)}
+        : {value: 'No commits yet', title: ''};
+    document.getElementById('person-facts').innerHTML =
+        factRow('Member since', profile.memberSince ? fmtDate(profile.memberSince) : '–') +
+        factRow('Repositories', repoCount.toLocaleString()) +
+        factRow('Revisions', revisions.toLocaleString()) +
+        factRow('Commits', commits.toLocaleString()) +
+        factRow('Last commit', lastCommit.value, lastCommit.title);
     $$('person-repo-count').setValue(plural(repoTotal, 'repo', 'repos'));
 
     // Header sparkline (item: commits-per-week).
     const sparkHtml = SvnHubUI.weeklySpark(weekly);
     if (sparkHtml) {
+        const sparkTotal = weekly.reduce((sum, w) => sum + (Number(w.count) || 0), 0);
+        const eyebrow = document.querySelector('#person-spark-wrap .eyebrow');
+        if (eyebrow)
+            eyebrow.textContent = plural(sparkTotal, 'commit', 'commits') + ' · last 26 weeks';
         document.getElementById('person-spark').innerHTML = sparkHtml;
         document.getElementById('person-spark-wrap').hidden = false;
     }
@@ -318,6 +338,20 @@
         : 'Public repositories owned by this person.';
     renderRepos();
     renderActivity(activity);
+
+    // When a person has nothing at all, two empty expandable cards read as
+    // broken. Collapse them into a single friendly empty state instead.
+    const hasNothing = repoTotal === 0 && activity.length === 0;
+    document.getElementById('person-empty-all').hidden = !hasNothing;
+    document.querySelectorAll('.person-main .person-expand-section').forEach((el) => {
+        el.hidden = hasNothing;
+    });
+    if (hasNothing) {
+        document.getElementById('person-empty-all-body').textContent = viewerCanSeePrivate
+            ? display + ' hasn\u2019t published any repositories or commit activity yet.'
+            : display + ' has no public repositories or commit activity yet.';
+    }
+
     SvnHubUI.initExpandableSections({
         sectionSelector: '.person-expand-section',
         headSelector: '.person-expand-head',
@@ -363,7 +397,6 @@
         if (btn) {
             btn.classList.toggle('is-editing', editing);
             btn.setAttribute('aria-label', editing ? 'Cancel name edit' : 'Edit name');
-            btn.setAttribute('title', editing ? 'Cancel edit' : 'Edit name');
             const swap = btn.querySelector('.t-icon-swap');
             if (swap)
                 swap.setAttribute('data-state', editing ? 'b' : 'a');
@@ -379,7 +412,6 @@
             return;
         btn.disabled = pending;
         btn.setAttribute('aria-busy', pending ? 'true' : 'false');
-        btn.setAttribute('title', pending ? 'Saving name' : 'Edit name');
     }
 
     function syncSavedProfileName(name, expectedVisibleName) {

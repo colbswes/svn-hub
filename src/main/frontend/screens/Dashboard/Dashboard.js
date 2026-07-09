@@ -58,6 +58,49 @@
         return repoRows.find((r) => r.repoId === Number(id)) || null;
     }
 
+    // ---- shared panel states (loading / empty / error) ----
+    // A short-lived skeleton so panels never read as empty/broken during their
+    // fetch window. Every loader overwrites its own container on completion, so
+    // these are always replaced. NOTE: only ever touch this screen's own panel
+    // containers here — never document.body or shared/global DOM.
+    function skeletonRows(n, cls) {
+        let out = '';
+        for (let i = 0; i < n; i++)
+            out += '<span class="skel home-skel-row' + (cls ? ' ' + cls : '') + '"></span>';
+        return '<div class="home-skel" aria-hidden="true">' + out + '</div>';
+    }
+
+    function emptyState(title, body) {
+        return '<div class="home-empty">' +
+            (title ? '<div class="home-empty-title">' + esc(title) + '</div>' : '') +
+            '<p class="muted">' + esc(body) + '</p>' +
+        '</div>';
+    }
+
+    function errorState(body) {
+        return '<div class="home-empty home-empty-error">' +
+            '<div class="home-empty-title">Couldn\u2019t load</div>' +
+            '<p class="muted">' + esc(body || 'Something went wrong. Refresh to try again.') + '</p>' +
+        '</div>';
+    }
+
+    function setPanel(id, html) {
+        const el = document.getElementById(id);
+        if (el)
+            el.innerHTML = html;
+    }
+
+    // Prime every panel with a skeleton before the async loaders run. Purely
+    // local innerHTML writes into containers that already exist in the markup.
+    function primeSkeletons() {
+        setPanel('home-recent-list', skeletonRows(2, 'home-skel-card'));
+        setPanel('repo-card-list', skeletonRows(2, 'home-skel-card'));
+        setPanel('home-attention-list', skeletonRows(3, 'home-skel-line'));
+        setPanel('home-activity-list', skeletonRows(4, 'home-skel-line'));
+        setPanel('home-wc-list', skeletonRows(3, 'home-skel-line'));
+        setPanel('home-insights-chart', '<div class="home-skel home-skel-chart" aria-hidden="true"><span class="skel"></span></div>');
+    }
+
     // ---- rendering ----
     function renderRepoCards(rows) {
         const list = document.getElementById('repo-card-list');
@@ -65,7 +108,7 @@
             return;
 
         if (!rows.length) {
-            list.innerHTML = '<div class="card card-pad repo-empty"><h3>No repositories yet</h3><p class="muted">Create a repository in your namespace to get started.</p></div>';
+            list.innerHTML = emptyState('No repositories yet', 'Create a repository in your namespace to get started.');
             return;
         }
 
@@ -81,14 +124,24 @@
         const handle = Utils.getData('handle') || '';
         document.getElementById('repo-prof-avatar').textContent = handle ? handle.substring(0, 2).toUpperCase() : 'SV';
         $$('repo-prof-handle').setValue(handle);
-        const prof = await Server.call('services/DiscoverService', 'getProfile', {handle: handle, page: 0, pageSize: 1});
-        $$('repo-prof-name').setValue((prof._Success && prof.profile && prof.profile.fullName) ? prof.profile.fullName : handle);
-        const sum = await Server.call('services/StatsService', 'userSummary', {});
-        if (sum._Success)
-            document.getElementById('repo-prof-stats').innerHTML =
-                SvnHubUI.statBlock(sum.reposOwned, 'repositories') +
-                SvnHubUI.statBlock(sum.commits, 'commits') +
-                SvnHubUI.statBlock(sum.checkouts, 'checkouts');
+        const statsEl = document.getElementById('repo-prof-stats');
+        try {
+            const prof = await Server.call('services/DiscoverService', 'getProfile', {handle: handle, page: 0, pageSize: 1});
+            $$('repo-prof-name').setValue((prof._Success && prof.profile && prof.profile.fullName) ? prof.profile.fullName : handle);
+            const sum = await Server.call('services/StatsService', 'userSummary', {});
+            if (sum._Success && statsEl) {
+                statsEl.innerHTML =
+                    SvnHubUI.statBlock(sum.reposOwned, 'repositories') +
+                    SvnHubUI.statBlock(sum.commits, 'commits') +
+                    SvnHubUI.statBlock(sum.checkouts, 'checkouts');
+            } else if (statsEl) {
+                statsEl.innerHTML = '';
+            }
+        } catch (e) {
+            $$('repo-prof-name').setValue(handle);
+            if (statsEl)
+                statsEl.innerHTML = '';
+        }
     }
 
     function applyFilter() {
@@ -98,8 +151,11 @@
 
     async function loadMine() {
         const res = await Server.call(WS_REPO, 'getRepositories');
-        if (!res._Success)
+        if (!res._Success) {
+            repoRows = [];
+            setPanel('repo-card-list', errorState('Your repositories couldn\u2019t be loaded.'));
             return;
+        }
         repoRows = res.rows.map(toRow);
         updatePillCounts();
         applyFilter();
@@ -110,9 +166,14 @@
         const list = document.getElementById('home-recent-list');
         if (!list)
             return;
-        if (!res._Success || !res.rows || !res.rows.length) {
+        if (!res._Success) {
             recentCount = 0;
-            list.innerHTML = '<div class="card card-pad repo-empty"><h3>No recent activity yet</h3><p class="muted">Repositories you own or can read will show up here once they have revisions.</p></div>';
+            list.innerHTML = errorState('Recent activity couldn\u2019t be loaded.');
+            return;
+        }
+        if (!res.rows || !res.rows.length) {
+            recentCount = 0;
+            list.innerHTML = emptyState('No recent activity yet', 'Repositories you own or can read will show up here once they have revisions.');
             return;
         }
         recentCount = res.rows.length;
@@ -124,9 +185,14 @@
         const list = document.getElementById('home-activity-list');
         if (!list)
             return;
-        if (!res._Success || !res.rows || !res.rows.length) {
+        if (!res._Success) {
             activityCount = 0;
-            list.innerHTML = '<div class="home-activity-empty muted">No commits have been recorded yet.</div>';
+            list.innerHTML = errorState('Recent commits couldn\u2019t be loaded.');
+            return;
+        }
+        if (!res.rows || !res.rows.length) {
+            activityCount = 0;
+            list.innerHTML = emptyState('', 'No commits have been recorded yet.');
             return;
         }
         activityCount = res.rows.length;
@@ -162,19 +228,23 @@
         if (!el)
             return;
         const res = await Server.callQuiet('services/StatsService', 'userCommitSeries', {days: 30});
-        if (!res._Success || !res.rows || !res.rows.length) {
-            el.innerHTML = '<div class="home-activity-empty muted">No commit activity recorded yet.</div>';
+        if (!res._Success) {
+            el.innerHTML = errorState('Commit activity couldn\u2019t be loaded.');
+            return;
+        }
+        if (!res.rows || !res.rows.length) {
+            el.innerHTML = emptyState('', 'No commit activity recorded yet.');
             return;
         }
         const rows = res.rows;
         const total = rows.reduce((sum, r) => sum + (Number(r.commits) || 0), 0);
         if (!total) {
-            el.innerHTML = '<div class="home-activity-empty muted">No commits in the last 30 days.</div>';
+            el.innerHTML = emptyState('', 'No commits in the last 30 days.');
             return;
         }
         const max = Math.max(1, ...rows.map((r) => Number(r.commits) || 0));
         el.innerHTML =
-            '<div class="home-ins-bars">' + rows.map((r) => {
+            '<div class="home-ins-bars" role="img" aria-label="' + esc(total + (total === 1 ? ' commit' : ' commits') + ' across the last 30 days') + '">' + rows.map((r) => {
                 const n = Number(r.commits) || 0;
                 const h = n ? Math.max(8, Math.round((n / max) * 100)) : 3;
                 const tip = fmtDayLabel(r.day) + ': ' + n + (n === 1 ? ' commit' : ' commits');
@@ -189,10 +259,15 @@
         if (!sumEl || !list)
             return;
         const res = await Server.callQuiet('services/StatsService', 'userWorkingCopySummary', {limit: 5, behindThreshold: 10});
-        const total = res._Success ? (Number(res.totalCopies) || 0) : 0;
+        if (!res._Success) {
+            sumEl.innerHTML = '';
+            list.innerHTML = errorState('Working copy stats couldn\u2019t be loaded.');
+            return;
+        }
+        const total = Number(res.totalCopies) || 0;
         if (!total) {
             sumEl.innerHTML = '';
-            list.innerHTML = '<div class="home-activity-empty muted">No working copies tracked yet — stats appear once people check out your repositories.</div>';
+            list.innerHTML = emptyState('', 'No working copies tracked yet — stats appear once people check out your repositories.');
             return;
         }
         const stale = Number(res.staleCopies) || 0;
@@ -209,7 +284,7 @@
             let cls = 'fresh-ok', label = 'up to date';
             if (behind >= threshold) {
                 cls = 'fresh-far';
-                label = behind + ' behind';
+                label = behind + ' behind · stale';
             } else if (behind >= 1) {
                 cls = 'fresh-near';
                 label = behind + ' behind';
@@ -230,10 +305,15 @@
         if (!sumEl || !list)
             return;
         const res = await Server.callQuiet(WS_REPO, 'getAttentionItems', {limit: 5});
-        const rows = (res._Success && res.rows) ? res.rows : [];
+        if (!res._Success) {
+            sumEl.innerHTML = '';
+            list.innerHTML = errorState('Attention items couldn\u2019t be loaded.');
+            return;
+        }
+        const rows = res.rows || [];
         if (!rows.length) {
             sumEl.innerHTML = '';
-            list.innerHTML = '<div class="home-activity-empty muted">Nothing needs your attention.</div>';
+            list.innerHTML = emptyState('', 'Nothing needs your attention.');
             return;
         }
         const issues = Number(res.openIssues) || 0;
@@ -499,6 +579,7 @@
     const gsHandle = document.getElementById('gs-handle');
     if (gsHandle && Utils.getData('handle'))
         gsHandle.textContent = Utils.getData('handle');
+    primeSkeletons();
     loadProfile();
     loadInsightsLite();
     loadWorkingCopies();

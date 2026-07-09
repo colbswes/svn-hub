@@ -332,57 +332,6 @@ body {
         var(--paper);
 }
 
-body.route-loading-active,
-body.route-loading-active * {
-    cursor: default !important;
-}
-
-.route-loader {
-    min-height: clamp(260px, 54vh, 560px);
-    display: flex;
-    align-items: stretch;
-    padding: clamp(22px, 4vw, 46px);
-    cursor: default;
-}
-
-.route-loader-skeleton {
-    width: 100%;
-    max-width: 1120px;
-    display: grid;
-    align-content: start;
-    gap: 14px;
-}
-
-.route-skel {
-    display: block;
-    background: linear-gradient(90deg, var(--paper-3) 25%, var(--paper-2) 50%, var(--paper-3) 75%);
-    background-size: 200% 100%;
-    border-radius: 8px;
-    animation: sk-shimmer 1.2s ease-in-out infinite;
-}
-
-.route-skel-title {
-    width: min(280px, 45%);
-    height: 30px;
-    border-radius: 10px;
-}
-
-.route-skel-line {
-    width: min(620px, 72%);
-    height: 16px;
-}
-
-.route-skel-line.short {
-    width: min(430px, 54%);
-}
-
-.route-skel-panel {
-    width: 100%;
-    height: clamp(180px, 36vh, 380px);
-    margin-top: 16px;
-    border-radius: var(--radius);
-}
-
 ::-webkit-scrollbar {
     width: 12px;
     height: 12px;
@@ -1543,6 +1492,11 @@ button.stat-card.admin-filter-card.active .n {
     font-size: 13px;
 }
 
+.nav-search .kiss-search-mirror,
+.discover-search .kiss-search-mirror {
+    color: var(--ink);
+}
+
 .nav-search .kiss-search-field::placeholder {
     color: var(--ink-4);
 }
@@ -2432,6 +2386,58 @@ body.why-modal-open {
 .home-activity-empty {
     padding: 14px 2px;
     font-size: 13px;
+}
+
+/* Unified panel empty / error state (attention, activity, working copies,
+   insights, repo lists). */
+.home-empty {
+    display: grid;
+    gap: 3px;
+    padding: 16px 2px;
+    color: var(--ink-2);
+}
+
+.home-empty-title {
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.home-empty p {
+    margin: 0;
+    font-size: 13px;
+}
+
+.home-empty-error .home-empty-title {
+    color: var(--danger, #a3402f);
+}
+
+/* Panel loading skeletons. Replaced as soon as each loader resolves. */
+.home-skel {
+    display: grid;
+    gap: 10px;
+    padding: 4px 0;
+}
+
+.home-skel-row {
+    height: 14px;
+    border-radius: 6px;
+}
+
+.home-skel-card {
+    height: 92px;
+    border-radius: var(--radius, 14px);
+}
+
+.home-skel-line {
+    height: 46px;
+    border-radius: 10px;
+}
+
+.home-skel-chart .skel {
+    display: block;
+    height: 120px;
+    border-radius: 10px;
 }
 
 /* Needs attention panel */
@@ -4121,6 +4127,10 @@ input[type=button].repo-back:focus-visible {
     left: 17px;
     width: 2px;
     background: linear-gradient(var(--copper), var(--rule));
+}
+
+.revision-spine.is-empty::before {
+    display: none;
 }
 
 .rev-node {
@@ -6607,6 +6617,10 @@ input[type=button].discover-tab.active {
     overflow: visible;
 }
 
+.discover-result-section.is-filtered {
+    gap: 0;
+}
+
 .discover-result-section.collapsed {
     gap: 0;
 }
@@ -6788,17 +6802,27 @@ input[type=button].filter-opt.active {
     grid-column: 1 / -1;
 }
 
+.discover-people-panel.is-master {
+    grid-template-columns: minmax(340px, 560px) minmax(280px, 1fr);
+    gap: 14px;
+    align-items: start;
+}
+
+.discover-people-panel.is-master .people-card-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
 .person-card {
     display: grid;
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr) auto;
     grid-template-areas:
-        "avatar main"
-        "avatar meta";
-    gap: 4px 14px;
+        "avatar main meta";
+    gap: 12px;
     align-items: center;
     width: 100%;
-    min-height: 96px;
-    padding: 15px 16px;
+    min-height: 74px;
+    padding: 13px 15px;
     background: var(--paper-soft);
     border: 1px solid var(--rule);
     border-radius: var(--radius);
@@ -6819,6 +6843,15 @@ input[type=button].filter-opt.active {
     transform: translateY(-1px);
 }
 
+.person-card.selected {
+    background: #fffefb;
+    border-color: rgba(68, 90, 168, 0.72);
+    box-shadow:
+        inset 4px 0 0 var(--brand-blue),
+        0 0 0 2px rgba(68, 90, 168, 0.12),
+        0 12px 24px -18px rgba(28, 26, 22, 0.48);
+}
+
 .person-card-avatar {
     grid-area: avatar;
     display: grid;
@@ -6836,6 +6869,7 @@ input[type=button].filter-opt.active {
 .person-card-main {
     grid-area: main;
     display: grid;
+    gap: 1px;
     min-width: 0;
 }
 
@@ -6855,17 +6889,320 @@ input[type=button].filter-opt.active {
 
 .person-card-meta {
     grid-area: meta;
-    display: flex;
+    display: inline-flex;
     align-items: baseline;
     gap: 6px;
+    justify-self: end;
+    padding: 4px 9px;
     color: var(--ink-3);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
     font-size: 12.5px;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .person-card-count {
     color: var(--copper-deep);
     font-size: 13px;
     font-weight: 800;
+}
+
+.people-detail-panel {
+    position: sticky;
+    top: 86px;
+    display: grid;
+    gap: 18px;
+    align-content: start;
+    max-height: calc(100vh - 110px);
+    overflow: auto;
+    min-height: 260px;
+    padding: 22px;
+    background:
+        radial-gradient(420px 180px at 100% 0%, rgba(31, 93, 87, 0.10), transparent 62%),
+        var(--paper-soft);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.people-detail-panel[hidden] {
+    display: none;
+}
+
+/* Content swap animation: fade + slight rise on the panel's contents (not the
+   box itself) whenever the selected person or load state changes. Transform /
+   opacity only — no layout. Re-triggered from JS via the .is-entering class. */
+.people-detail-panel.is-entering > * {
+    animation: people-detail-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes people-detail-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Gentle stagger so header → stats → activity cascade in rather than snapping
+   together. Capped so long panels don't feel laggy. */
+.people-detail-panel.is-entering > *:nth-child(2) { animation-delay: 40ms; }
+.people-detail-panel.is-entering > *:nth-child(3) { animation-delay: 80ms; }
+.people-detail-panel.is-entering > *:nth-child(4) { animation-delay: 110ms; }
+.people-detail-panel.is-entering > *:nth-child(n + 5) { animation-delay: 130ms; }
+
+@media (prefers-reduced-motion: reduce) {
+    .people-detail-panel.is-entering > * {
+        animation: none;
+    }
+}
+
+.people-detail-panel.is-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+    color: var(--ink-3);
+    border-style: dashed;
+    border-color: var(--rule-2);
+    background: var(--paper-soft);
+}
+
+.people-detail-panel.is-empty .people-detail-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    max-width: 34ch;
+}
+
+.people-detail-panel.is-empty .people-detail-copy h2 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 20px;
+}
+
+.people-detail-panel.is-empty .people-detail-handle {
+    color: var(--ink-3);
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+.people-detail-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    color: var(--brand-blue);
+    background: var(--copper-soft);
+    border: 1px solid #b9c6ec;
+    border-radius: 14px;
+    font-family: var(--mono);
+    font-size: 21px;
+    font-weight: 800;
+}
+
+.people-detail-head {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+    grid-template-areas:
+        "avatar copy action";
+    gap: 4px 14px;
+    align-items: center;
+}
+
+.people-detail-avatar {
+    grid-area: avatar;
+    display: grid;
+    place-items: center;
+    width: 58px;
+    height: 58px;
+    color: var(--paper-soft);
+    background: linear-gradient(140deg, var(--teal), var(--brand-blue-deep));
+    border-radius: 15px;
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 750;
+}
+
+.people-detail-copy {
+    grid-area: copy;
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.people-detail-copy h2 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 23px;
+    line-height: 1.05;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.people-detail-handle {
+    color: var(--ink-4);
+    font-size: 13px;
+}
+
+.people-detail-since {
+    color: var(--ink-3);
+    font-size: 12px;
+}
+
+.people-detail-open {
+    grid-area: action;
+    align-self: start;
+    min-width: 0;
+    min-height: 0;
+    padding: 4px 0;
+    color: var(--copper-deep);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 13px;
+    font-weight: 750;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.people-detail-open:hover,
+.people-detail-open:focus-visible {
+    color: var(--ink);
+    background: transparent;
+    box-shadow: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* Stat strip: repositories / revisions / commits. */
+.people-detail-statgrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-sm);
+}
+
+.people-detail-statgrid .profile-stat-n {
+    font-size: 22px;
+}
+
+/* Content blocks (activity, top repos, recent activity). */
+.people-detail-block {
+    display: grid;
+    gap: 10px;
+}
+
+.people-detail-block-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 12px;
+    font-weight: 750;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.people-detail-block-note {
+    color: var(--ink-4);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+}
+
+.people-detail-note {
+    max-width: 42ch;
+    margin: 0;
+    color: var(--ink-3);
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+.people-detail-loading {
+    padding: 6px 0;
+}
+
+/* Recent activity list. */
+.people-act-list {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.people-act {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    gap: 10px;
+    padding: 8px;
+    margin: 0 -8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.people-act:hover,
+.people-act:focus-visible {
+    background: var(--paper-2);
+    outline: none;
+}
+
+.people-act-rev {
+    color: var(--copper-deep);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.people-act-body {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.people-act-msg {
+    color: var(--ink);
+    font-size: 13.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.people-act-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    color: var(--ink-3);
+    font-size: 11.5px;
+    min-width: 0;
+}
+
+.people-act-repo {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.people-act-when {
+    flex: none;
+    color: var(--ink-4);
 }
 
 .discover-main {
@@ -6985,6 +7322,10 @@ input[type=button].filter-opt.active {
     box-shadow: 0 8px 18px -12px rgba(28, 26, 22, 0.48);
     transform: translateX(var(--seg-x, 0));
     transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.discover-filter.no-animate::before {
+    transition: none;
 }
 
 /* Thumb slides by whole multiples of its own width (one segment each) */
@@ -7128,6 +7469,7 @@ input[type=button].people-back-link:focus-visible {
     min-width: 0;
     min-height: 36px;
     padding: 6px 40px 6px 0;
+    color: var(--ink);
     background: transparent;
     border: 0;
     box-shadow: none;
@@ -7163,8 +7505,91 @@ input[type=button].people-back-link:focus-visible {
     justify-content: center;
 }
 
+.discover-main #repo-results.repo-card-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.discover-main #repo-results .discover-load-more {
+    grid-column: 1 / -1;
+}
+
 .discover-main .repo-card {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    padding: 14px 16px;
     cursor: pointer;
+}
+
+.discover-main .repo-card-head {
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.discover-main .repo-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    font-size: 15px;
+}
+
+.discover-main .repo-card-path {
+    font-size: 11.5px;
+    line-height: 1.25;
+}
+
+.discover-main .repo-card h3 {
+    margin-top: 0;
+    font-size: 16.5px;
+    line-height: 1.12;
+}
+
+.discover-main .repo-card-right {
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.discover-main .visibility-pill,
+.discover-main .head-pill {
+    min-height: 22px;
+    padding: 3px 8px;
+    font-size: 11.5px;
+}
+
+.discover-main .repo-card-desc {
+    display: -webkit-box;
+    min-height: 18px;
+    margin: 0;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: 13.5px;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.discover-main .repo-card-meta {
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin-top: 0;
+    padding-top: 0;
+    overflow: hidden;
+    border-top: 0;
+    font-size: 12px;
+}
+
+.discover-main .repo-card-meta > span:first-child {
+    flex: none;
+}
+
+.discover-main .repo-card-meta .repo-key {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @media (max-width: 960px) {
@@ -7189,6 +7614,18 @@ input[type=button].people-back-link:focus-visible {
         max-width: none;
     }
 
+    .discover-main #repo-results.repo-card-list {
+        grid-template-columns: 1fr;
+    }
+
+    .discover-people-panel.is-master {
+        grid-template-columns: 1fr;
+    }
+
+    .people-detail-panel {
+        display: none;
+    }
+
     .feature-stats {
         flex-wrap: wrap;
         gap: 18px;
@@ -7200,6 +7637,19 @@ input[type=button].people-back-link:focus-visible {
 
     .people-card-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 520px) {
+    .person-card {
+        grid-template-columns: 40px minmax(0, 1fr);
+        grid-template-areas:
+            "avatar main"
+            "avatar meta";
+    }
+
+    .person-card-meta {
+        justify-self: start;
     }
 }
 
@@ -7845,6 +8295,43 @@ input[type=password].input-bad {
     min-width: 0;
 }
 
+.person-empty-all {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    padding: 48px 24px;
+    text-align: center;
+    border-style: dashed;
+    border-color: var(--rule-2);
+}
+
+.person-empty-all[hidden] {
+    display: none;
+}
+
+.person-empty-all-icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    margin-bottom: 2px;
+    color: var(--brand-blue);
+    background: var(--copper-soft);
+    border: 1px solid #b9c6ec;
+    border-radius: 15px;
+}
+
+.person-empty-all h2 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 20px;
+}
+
+.person-empty-all p {
+    max-width: 44ch;
+    margin: 0;
+}
+
 .person-expand-section {
     display: grid;
     gap: 14px;
@@ -8271,6 +8758,7 @@ input[type=password].input-bad {
     transition-timing-function: ease-out;
 }
 
+.person-name-edit[hidden],
 .person-name-save[hidden] {
     display: none;
 }
