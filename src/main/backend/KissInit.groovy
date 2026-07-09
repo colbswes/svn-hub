@@ -6,8 +6,12 @@ import java.util.function.Consumer
 import com.svnhub.migrate.SchemaMigrator
 import com.svnhub.migrate.RecordMigrator
 import com.svnhub.migrate.SchemaStatus
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 
 class KissInit {
+
+    private static final Logger logger = LogManager.getLogger(KissInit.class)
 
     /**
      * Configure the system.
@@ -15,6 +19,8 @@ class KissInit {
     static void init() {
 
         MainServlet.readIniFile "application.ini", "main"
+
+        requireDatabaseConfigured()
 
         // Authentication bootstrap.
         MainServlet.allowWithoutAuthentication("services.Register", "register")
@@ -53,6 +59,34 @@ class KissInit {
             // - Clean up temporary files
         } as Consumer<UserData>)
 
+    }
+
+    /**
+     * SvnHub cannot run without a database: every REST service and cron task
+     * needs the connection.  Kiss core, being application-neutral, tolerates a
+     * missing database by starting in a "bypass logins" mode -- but for SvnHub
+     * that produces a server that appears up while every service fails, which
+     * looks broken rather than misconfigured.  Detect the missing/blank database
+     * configuration here, log a clear explanation, and terminate the JVM (and
+     * therefore Tomcat) so the operator fixes the configuration instead of
+     * chasing downstream null-connection errors.
+     */
+    private static void requireDatabaseConfigured() {
+        String dbType = (String) MainServlet.getEnvironment("DatabaseType")
+        String dbName = (String) MainServlet.getEnvironment("DatabaseName")
+        boolean configured = dbType != null && !dbType.trim().isEmpty() &&
+                             dbName != null && !dbName.trim().isEmpty()
+        if (configured)
+            return
+        logger.fatal("* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *")
+        logger.fatal("* * * SvnHub CANNOT START: no database configured.")
+        logger.fatal("* * * DatabaseType and DatabaseName must be set in")
+        logger.fatal("* * *     src/main/backend/application.ini")
+        logger.fatal("* * * If that file is missing, copy application.template.ini to")
+        logger.fatal("* * * application.ini and fill in the Database* keys.")
+        logger.fatal("* * * Shutting down Tomcat.")
+        logger.fatal("* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *")
+        System.exit(1)
     }
 
     /**

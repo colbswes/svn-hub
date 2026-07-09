@@ -9,6 +9,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 
 /**
  * Ingest the svnserve --log-file into the statistics firehose.
@@ -30,8 +32,18 @@ class IngestSvnLogs {
     static final int DEFAULT_MAX_LINES = 50000
     static final long MAX_BYTES_PER_RUN = 8L * 1024 * 1024
 
+    private static final Logger logger = LogManager.getLogger(IngestSvnLogs.class)
+    private static boolean warnedNoDb = false
+
     static void start(Object obj) {
         Connection db = (Connection) obj
+        if (db == null) {
+            if (!warnedNoDb) {
+                warnedNoDb = true
+                logger.warn("IngestSvnLogs idle: no database configured. Copy src/main/backend/application.template.ini to application.ini, set the Database* keys, and restart. (Shown once.)")
+            }
+            return
+        }
         String logFile = MainServlet.getEnvironment("SvnLogFile")
         if (!logFile)
             return

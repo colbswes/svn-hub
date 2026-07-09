@@ -3,6 +3,8 @@ package CronTasks
 import org.kissweb.database.Connection
 import org.kissweb.database.Record
 import com.svnhub.SvnRepo
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 
 /**
  * Periodically refresh each repository's cached HEAD revision and warm the
@@ -13,10 +15,20 @@ import com.svnhub.SvnRepo
  */
 class RefreshRepoHead {
 
+    private static final Logger logger = LogManager.getLogger(RefreshRepoHead.class)
+    private static boolean warnedNoDb = false
+
     static final int MAX_REVS_PER_RUN = 200
 
     static void start(Object obj) {
         Connection db = (Connection) obj
+        if (db == null) {
+            if (!warnedNoDb) {
+                warnedNoDb = true
+                logger.warn("RefreshRepoHead idle: no database configured. Copy src/main/backend/application.template.ini to application.ini, set the Database* keys, and restart. (Shown once.)")
+            }
+            return
+        }
         long now = System.currentTimeMillis()
         List<Record> repos = db.fetchAll("select * from repository where is_active = 'Y'")
         for (Record r : repos) {
