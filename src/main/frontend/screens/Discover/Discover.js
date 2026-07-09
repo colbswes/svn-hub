@@ -108,7 +108,7 @@
         $$('result-sub').setValue(term
             ? 'Results for "' + esc(term) + '" across repositories'
             : (browseMode
-                ? 'Repositories you can see, most recently active first'
+                ? 'Currently showing most active repositories'
                 : 'Public and accessible Subversion repositories'));
         $$('repos-count').setValue(plural(rows.length, 'repo', 'repos'));
 
@@ -255,9 +255,8 @@
         renderAll();
     }
 
-    // Default "Browse" listing when there is no query: repositories the viewer
-    // can see, most recently active first. Signed-in users get owned + granted
-    // + public repos; guests get the public search listing.
+    // Default "Browse" listing when there is no query. Signed-in users get owned
+    // + granted + public repos; guests get the public search listing.
     async function loadBrowse() {
         const token = ++searchToken;
         const res = guest

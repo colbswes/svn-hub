@@ -12,8 +12,45 @@
     const guest = !Server.uuid;
     Utils.saveData('guest', guest);
     const isAdmin = Utils.getData('isAdmin') === true;
+    const appNav = document.querySelector('.app-nav');
     const primaryNav = document.getElementById('primary-nav');
+    const navMenu = document.getElementById('nav-menu');
+    const mobileNavToggle = document.getElementById('mobile-nav-toggle');
+    const mobileNavMq = window.matchMedia('(max-width: 760px)');
     let activeNavId = null;
+
+    function isMobileNav() {
+        return mobileNavMq.matches;
+    }
+
+    function syncMobileNavAccessibility(open) {
+        if (!navMenu)
+            return;
+        const hidden = isMobileNav() && !open;
+        navMenu.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+        if ('inert' in navMenu)
+            navMenu.inert = hidden;
+    }
+
+    function setMobileNavOpen(open) {
+        if (!appNav || !mobileNavToggle)
+            return;
+        const shouldOpen = !!open && isMobileNav();
+        appNav.classList.toggle('menu-open', shouldOpen);
+        mobileNavToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        mobileNavToggle.setAttribute('aria-label', shouldOpen ? 'Close navigation' : 'Open navigation');
+        mobileNavToggle.title = shouldOpen ? 'Close menu' : 'Menu';
+        syncMobileNavAccessibility(shouldOpen);
+        window.requestAnimationFrame(updateActiveNavPill);
+    }
+
+    function syncMobileNavMode() {
+        if (!isMobileNav()) {
+            setMobileNavOpen(false);
+            return;
+        }
+        syncMobileNavAccessibility(appNav && appNav.classList.contains('menu-open'));
+    }
 
     function isUsableNavButton(el) {
         return el && primaryNav && primaryNav.contains(el) && el.offsetParent !== null && !el.disabled;
@@ -59,9 +96,20 @@
         const navSearch = document.getElementById('nav-search');
         if (navSearch)
             navSearch.classList.toggle('hidden', page === 'screens/Discover/Discover');
+        setMobileNavOpen(false);
     }
 
     Utils.setAppNavActive = setActive;
+
+    if (mobileNavToggle) {
+        mobileNavToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            setMobileNavOpen(!appNav.classList.contains('menu-open'));
+        });
+        syncMobileNavMode();
+        if (mobileNavMq.addEventListener)
+            mobileNavMq.addEventListener('change', syncMobileNavMode);
+    }
 
     //  Map a screen page path to its Router route (declared in routes.js).  Screen
     //  data is passed via Utils.saveData before navigating (screens read it with
@@ -87,6 +135,7 @@
     }
 
     function goSignIn() {
+        setMobileNavOpen(false);
         Server.clearSession();
         Router.go('/login');
     }
@@ -129,6 +178,7 @@
 
     if (primaryNav) {
         window.addEventListener('resize', function () {
+            syncMobileNavMode();
             updateActiveNavPill();
         });
     }
@@ -169,12 +219,16 @@
         toggleAcctMenu();
     });
     document.addEventListener('click', function (e) {
+        if (appNav && !e.target.closest('.app-nav'))
+            setMobileNavOpen(false);
         if (!e.target.closest('#acct-menu'))
             closeAcctMenu();
     });
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape')
+        if (e.key === 'Escape') {
+            setMobileNavOpen(false);
             closeAcctMenu();
+        }
     });
 
     document.getElementById('menu-logout').addEventListener('click', function () {
@@ -398,9 +452,6 @@
     function defaultNavLabel() {
         return guest ? 'Public repositories' : 'Your repositories';
     }
-    function defaultNavEmptyText() {
-        return guest ? 'No public repositories yet.' : 'You do not own any repositories yet.';
-    }
     function loadDefaultNavRows() {
         if (!navDefaultPromise) {
             navDefaultPromise = (guest
@@ -423,7 +474,10 @@
             return;
         }
         if (navDefaultRows) {
-            renderNavGroups([{label: defaultNavLabel(), rows: navDefaultRows, render: navRepoRow}], defaultNavEmptyText());
+            if (navDefaultRows.length)
+                renderNavGroups([{label: defaultNavLabel(), rows: navDefaultRows, render: navRepoRow}], '');
+            else
+                hideNavResults();
             return;
         }
         const token = ++navSearchToken;
@@ -431,7 +485,10 @@
         const rows = await loadDefaultNavRows();
         if (token !== navSearchToken || navQ.value.trim() || document.activeElement !== navQ)
             return;
-        renderNavGroups([{label: defaultNavLabel(), rows: rows, render: navRepoRow}], defaultNavEmptyText());
+        if (rows.length)
+            renderNavGroups([{label: defaultNavLabel(), rows: rows, render: navRepoRow}], '');
+        else
+            hideNavResults();
     }
     async function runNavSearch() {
         const token = ++navSearchToken;
@@ -465,6 +522,7 @@
     navQ.addEventListener('input', function () {
         syncNavClear();
         clearTimeout(navSearchTimer);
+        navSearchToken++;
         if (!navQ.value.trim()) {
             showDefaultNavResults();
             return;

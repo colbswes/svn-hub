@@ -150,10 +150,14 @@ class Router {
         path = Router.#normalize(path);
         if (tag)
             path += (path.indexOf('?') >= 0 ? '&' : '?') + 'tag=' + encodeURIComponent(tag);
-        if (window.location.hash === '#' + path)
+        const targetHash = '#' + path;
+        if (window.location.hash === targetHash) {
+            Router.#replaceCleanBase(targetHash);
             Router.#dispatch();   // same hash fires no hashchange — dispatch directly
-        else
-            window.location.hash = '#' + path;
+        } else {
+            window.location.hash = targetHash;
+            Router.#replaceCleanBase(targetHash);
+        }
     }
 
     /**
@@ -164,8 +168,7 @@ class Router {
      */
     static replace(path) {
         path = Router.#normalize(path);
-        const base = window.location.pathname + window.location.search;
-        window.history.replaceState(null, '', base + '#' + path);
+        window.history.replaceState(null, '', Router.#cleanBaseUrl() + '#' + path);
         Router.#dispatch();   // replaceState fires no hashchange
     }
 
@@ -228,6 +231,23 @@ class Router {
         if (path.charAt(0) !== '/')
             path = '/' + path;
         return path;
+    }
+
+    static #cleanBaseUrl() {
+        const params = new URLSearchParams(window.location.search || '');
+        const keep = new URLSearchParams();
+        const now = params.get('now');
+        if (now)
+            keep.set('now', now);
+        const query = keep.toString();
+        return window.location.pathname + (query ? '?' + query : '');
+    }
+
+    static #replaceCleanBase(hash) {
+        const target = Router.#cleanBaseUrl() + (hash || window.location.hash || '');
+        const current = window.location.pathname + window.location.search + window.location.hash;
+        if (target !== current)
+            window.history.replaceState(history.state, '', target);
     }
 
     static #parseHash() {
@@ -309,6 +329,41 @@ class Router {
         return (typeof def.page === 'function') ? def.page() : def.page;
     }
 
+    static #clearBusyCursor() {
+        if (document.documentElement)
+            document.documentElement.style.cursor = '';
+        if (document.body)
+            document.body.style.cursor = '';
+    }
+
+    static #routeLoaderMarkup() {
+        return '<div class="route-loader" role="status" aria-label="Loading">' +
+            '<span class="busy-spin route-loader-spin" aria-hidden="true"></span>' +
+            '</div>';
+    }
+
+    static #nextPaint() {
+        if (typeof Utils.nextPaint === 'function')
+            return Utils.nextPaint();
+        return Promise.resolve();
+    }
+
+    static async #showRouteLoader(tag) {
+        Router.#clearBusyCursor();
+        const host = tag ? document.getElementById(tag) : document.body;
+        if (!host)
+            return;
+        document.body.classList.add('route-loading-active');
+        host.innerHTML = Router.#routeLoaderMarkup();
+        await Router.#nextPaint();
+    }
+
+    static #hideRouteLoader() {
+        if (document.body)
+            document.body.classList.remove('route-loading-active');
+        Router.#clearBusyCursor();
+    }
+
     static async #dispatch() {
         const parsed = Router.#parseHash();
         let matched = Router.#match(parsed.path);
@@ -341,6 +396,7 @@ class Router {
         const tag = Router.#query.tag || def.tag;
 
         try {
+            Router.#clearBusyCursor();
             if (tag) {
                 //  Sub-screen: make sure its shell occupies the body, then load into the region.
                 //  shell defaults to the default route (the app's main shell).
@@ -352,9 +408,11 @@ class Router {
                 }
                 const shellPage = Router.#resolvePage(shellRoute.def);
                 if (Router.#bodyPage !== shellPage) {
+                    await Router.#showRouteLoader(null);
                     await Utils.loadPage(shellPage);
                     Router.#bodyPage = shellPage;
                 }
+                await Router.#showRouteLoader(tag);
                 await Utils.loadPage(Router.#resolvePage(def), tag, def.focus, matched.params);
             } else {
                 //  Full-body screen (shell or login).  Reload unless we are already rendering
@@ -363,6 +421,7 @@ class Router {
                 //  instead of leaving the last sub-screen's content showing.
                 const page = Router.#resolvePage(def);
                 if (Router.#bodyRoute !== matched.route.path) {
+                    await Router.#showRouteLoader(null);
                     await Utils.loadPage(page, null, def.focus, matched.params);
                     Router.#bodyPage = page;
                 }
@@ -370,6 +429,8 @@ class Router {
             Router.#bodyRoute = matched.route.path;
         } catch (e) {
             console.log('Router: error loading route "' + matched.route.path + '": ' + (e && e.message ? e.message : e));
+        } finally {
+            Router.#hideRouteLoader();
         }
     }
 }

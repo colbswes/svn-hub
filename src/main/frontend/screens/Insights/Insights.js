@@ -969,6 +969,10 @@
         return;
     }
 
+    $$('ins-repo').clear();
+    $$('ins-repo').add('all', 'All repositories');
+    $$('ins-repo').setValue('all');
+
     const repos = await Server.call(WS_REPO, 'getRepositories');
     const haveRepos = repos._Success && repos.rows && repos.rows.length;
     if (!haveRepos) {
@@ -977,8 +981,6 @@
         return;
     }
 
-    $$('ins-repo').clear();
-    $$('ins-repo').add('all', 'All repositories');
     for (const r of repos.rows) {
         $$('ins-repo').add(String(r.repoId), r.name);
         repoNames[r.repoId] = r.name;

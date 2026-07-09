@@ -31,6 +31,13 @@
     if (guest)
         $$('home-create').setValue('Sign Up');
 
+    const authScoped = document.querySelectorAll('.home [data-auth]');
+    for (let i = 0; i < authScoped.length; i++) {
+        const el = authScoped[i];
+        const mode = el.getAttribute('data-auth');
+        el.hidden = (mode === 'guest' && !guest) || (mode === 'signed-in' && guest);
+    }
+
     $$('home-create').onclick(function () {
         if (guest) {
             openSignUp();
@@ -45,32 +52,50 @@
 
     const navMap = {
         discover: 'discover',
-        repositories: 'repositories',
+        home: 'repositories',
         repository: 'repositories',
         insights: 'insights',
         help: 'help',
+        signin: 'signin',
+        signup: 'signup',
         why: 'why'
     };
 
-    const links = document.querySelectorAll('.home [data-nav]');
-    for (let i = 0; i < links.length; i++) {
-        const el = links[i];
+    function openHelpTopic(topic) {
+        Utils.saveData('helpTopic', topic);
+        navClick('help');
+    }
+
+    function followFooterLink(el) {
+        const topic = el.getAttribute('data-help-topic');
+        if (topic) {
+            openHelpTopic(topic);
+            return;
+        }
         const target = navMap[el.getAttribute('data-nav')] || 'discover';
+        if (target === 'why') {
+            showWhyPage();
+            return;
+        }
+        if (target === 'signup') {
+            openSignUp();
+            return;
+        }
+        navClick(target);
+    }
+
+    const links = document.querySelectorAll('.home [data-nav]');
+    const topicLinks = document.querySelectorAll('.home [data-help-topic]');
+    const allFooterLinks = Array.from(links).concat(Array.from(topicLinks));
+    for (let i = 0; i < allFooterLinks.length; i++) {
+        const el = allFooterLinks[i];
         el.addEventListener('click', function () {
-            if (target === 'why') {
-                showWhyPage();
-                return;
-            }
-            navClick(target);
+            followFooterLink(el);
         });
         el.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                if (target === 'why') {
-                    showWhyPage();
-                    return;
-                }
-                navClick(target);
+                followFooterLink(el);
             }
         });
     }

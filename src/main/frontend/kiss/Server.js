@@ -96,7 +96,7 @@ class Server {
      */
     static async logout(captureReturn = false) {
         Utils.suspendDepth = 0;
-        document.body.style.cursor = 'default';
+        document.body.style.cursor = '';
         Utils.cleanup();  //  clean up any context information
         DOMUtils.preventNavigation(false);  //  disable back button protection
 
@@ -190,7 +190,7 @@ class Server {
     }
 
     /**
-     * Evoke a back-end REST service without changing the global cursor / busy count.
+     * Evoke a back-end REST service without changing the global busy count.
      * Use this for lightweight background searches where the UI owns any loading
      * indication and the whole app should not look blocked.  Unlike {@link Server.call},
      * transport/parse failures do not raise the framework error popup — the caller gets
@@ -325,13 +325,21 @@ class Server {
     }
 
     static incCount() {
-        if (++Utils.suspendDepth === 1)
-            document.body.style.cursor = 'wait';
+        Utils.suspendDepth++;
+        Server.clearBusyCursor();
     }
 
     static decCount() {
-        if (--Utils.suspendDepth === 0)
-            document.body.style.cursor = 'default';
+        if (Utils.suspendDepth > 0)
+            Utils.suspendDepth--;
+        else
+            Utils.suspendDepth = 0;
+        Server.clearBusyCursor();
+    }
+
+    static clearBusyCursor() {
+        if (document.body && (document.body.style.cursor === 'wait' || document.body.style.cursor === 'progress'))
+            document.body.style.cursor = '';
     }
 
     /**
@@ -506,7 +514,5 @@ class Server {
 Server.errorMessage = 'Error communicating with the server.';
 Server.timeLastCall;
 Server.maxInactiveSeconds = 0;  // max number of seconds between calls or zero for no max (or auto logout)
-
-
 
 

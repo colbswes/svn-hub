@@ -166,8 +166,25 @@
                 <p class="muted small">Hosted Subversion for teams who want one source of truth and revisions everyone agrees on.</p>
             </div>
             <div class="home-footer-cols">
-                <div><h5>Product</h5><ul><li><a data-nav="discover">Explore</a></li><li><a data-nav="repositories">Repositories</a></li><li><a data-nav="insights">Insights</a></li></ul></div>
-                <div><h5>Model</h5><ul><li><a data-nav="help">Revisions</a></li><li><a data-nav="help">Branches &amp; tags</a></li><li><a data-nav="help">Partial checkout</a></li><li><a data-nav="why">Why this service exists</a></li></ul></div>
+                <div>
+                    <h5>Product</h5>
+                    <ul>
+                        <li><a role="button" tabindex="0" data-nav="discover">Explore</a></li>
+                        <li data-auth="signed-in"><a role="button" tabindex="0" data-nav="home">Home</a></li>
+                        <li data-auth="signed-in"><a role="button" tabindex="0" data-nav="insights">Insights</a></li>
+                        <li data-auth="guest"><a role="button" tabindex="0" data-nav="signin">Sign in</a></li>
+                        <li data-auth="guest"><a role="button" tabindex="0" data-nav="signup">Create account</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h5>Model</h5>
+                    <ul>
+                        <li><a role="button" tabindex="0" data-help-topic="revisions">Revisions</a></li>
+                        <li><a role="button" tabindex="0" data-help-topic="layout">Branches &amp; tags</a></li>
+                        <li><a role="button" tabindex="0" data-help-topic="checkout">Partial checkout</a></li>
+                        <li><a role="button" tabindex="0" data-nav="why">Why this service exists</a></li>
+                    </ul>
+                </div>
             </div>
         </div>
         <div class="home-footer-bottom">

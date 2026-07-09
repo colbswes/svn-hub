@@ -454,14 +454,32 @@
     // lazily the first time the Files section is actually shown.
     let gridShown = false;
     let filesLoaded = false;
+    const STANDARD_ROOTS = ['trunk', 'branches', 'tags'];
+    const STANDARD_ROOT_SET = new Set(STANDARD_ROOTS);
+    let standardRootsKnown = false;
+    let availableStandardRoots = new Set();
     function ensureGrid() {
         if (!gridShown) {
             browseGrid.show();
             gridShown = true;
         }
     }
+    function hideBrowseEmpty() {
+        const empty = document.getElementById('browse-empty');
+        if (!empty)
+            return;
+        empty.hidden = true;
+        empty.innerHTML = '';
+    }
+    function hideBrowseResults() {
+        const gridEl = document.getElementById('browse-grid');
+        if (gridEl)
+            gridEl.style.display = 'none';
+        hideBrowseEmpty();
+    }
     function showDirectoryList(resize = true) {
         currentFilePath = '';
+        hideBrowseEmpty();
         const gridEl = document.getElementById('browse-grid');
         const viewer = document.getElementById('file-viewer');
         if (gridEl)
@@ -471,7 +489,22 @@
         if (resize && gridShown)
             window.dispatchEvent(new Event('resize'));
     }
+    function setBrowseEmpty(message) {
+        const empty = document.getElementById('browse-empty');
+        const gridEl = document.getElementById('browse-grid');
+        if (!message) {
+            hideBrowseEmpty();
+            return;
+        }
+        if (gridEl)
+            gridEl.style.display = 'none';
+        if (!empty)
+            return;
+        empty.hidden = false;
+        empty.innerHTML = '<p class="muted">' + escapeHtml(message) + '</p>';
+    }
     function showInlineFile() {
+        hideBrowseEmpty();
         const gridEl = document.getElementById('browse-grid');
         const viewer = document.getElementById('file-viewer');
         if (gridEl)
@@ -561,6 +594,31 @@
                 el.classList.toggle('active', root === name);
         });
     }
+    function syncRootChips(entries) {
+        if (!Array.isArray(entries))
+            return;
+        availableStandardRoots = new Set(entries
+            .filter((e) => e && e.kind === 'dir' && STANDARD_ROOT_SET.has(e.name))
+            .map((e) => e.name));
+        standardRootsKnown = true;
+        const host = document.getElementById('root-chips');
+        if (host)
+            host.hidden = availableStandardRoots.size === 0;
+        STANDARD_ROOTS.forEach((name) => {
+            const el = document.getElementById('root-' + name);
+            if (el)
+                el.hidden = availableStandardRoots.size > 0 && !availableStandardRoots.has(name);
+        });
+        updateRootsActive();
+    }
+    async function ensureStandardRoots(rootRes = null) {
+        if (standardRootsKnown)
+            return rootRes;
+        const res = rootRes || await Server.callQuiet(WS_BROWSE, 'listDir', {repoId: repoId, path: ''});
+        if (res._Success)
+            syncRootChips(res.entries || []);
+        return res;
+    }
 
     const crumbHost = document.getElementById('browse-crumb');
     if (crumbHost)
@@ -575,12 +633,29 @@
         });
 
     async function loadDir(options = {}) {
-        if (options.showList !== false)
-            showDirectoryList(false);
+        const shouldShowList = options.showList !== false;
+        if (shouldShowList)
+            hideBrowseResults();
         renderCrumb();
         updateRootsActive();
         browseGrid.clear();
-        const res = await Server.call(WS_BROWSE, 'listDir', {repoId: repoId, path: currentPath});
+        let res = null;
+        if (currentPath === '')
+            res = await Server.callQuiet(WS_BROWSE, 'listDir', {repoId: repoId, path: ''});
+        await ensureStandardRoots(currentPath === '' ? res : null);
+
+        const currentRoot = currentPath ? currentPath.split('/')[0] : '';
+        if (STANDARD_ROOT_SET.has(currentRoot) && standardRootsKnown && !availableStandardRoots.has(currentRoot)) {
+            currentPath = '';
+            currentFilePath = '';
+            renderCrumb();
+            updateRootsActive();
+            writeRepoHistory('go-files', {path: '', filePath: ''}, 'replace');
+            res = await Server.callQuiet(WS_BROWSE, 'listDir', {repoId: repoId, path: ''});
+        } else if (!res) {
+            res = await Server.callQuiet(WS_BROWSE, 'listDir', {repoId: repoId, path: currentPath});
+        }
+
         if (res._Success) {
             $$('repo-head').setValue('HEAD r' + res.revision);
             const rows = res.entries.map((e) => ({
@@ -598,6 +673,12 @@
                 return a.name.localeCompare(b.name);
             });
             browseGrid.addRecords(rows);
+            if (shouldShowList && rows.length)
+                showDirectoryList(false);
+            else if (shouldShowList)
+                setBrowseEmpty(currentPath ? 'No files in /' + currentPath + ' yet.' : 'No files in this repository yet.');
+        } else if (shouldShowList) {
+            setBrowseEmpty(currentPath ? '/' + currentPath + ' does not exist yet.' : 'No files in this repository yet.');
         }
     }
 
@@ -610,15 +691,20 @@
         writeRepoHistory('go-files', route, mode);
         await applyView('go-files', route);
     }
-    document.getElementById('root-trunk').addEventListener('click', () => navigateDir('trunk'));
-    document.getElementById('root-branches').addEventListener('click', () => navigateDir('branches'));
-    document.getElementById('root-tags').addEventListener('click', () => navigateDir('tags'));
+    function navigateStandardRoot(root) {
+        if (standardRootsKnown && !availableStandardRoots.has(root))
+            return;
+        navigateDir(root);
+    }
+    document.getElementById('root-trunk').addEventListener('click', () => navigateStandardRoot('trunk'));
+    document.getElementById('root-branches').addEventListener('click', () => navigateStandardRoot('branches'));
+    document.getElementById('root-tags').addEventListener('click', () => navigateStandardRoot('tags'));
 
     // ---- README (checks trunk then root; the menu item only appears when one exists) ----
     async function loadReadme() {
-        let res = await Server.call(WS_BROWSE, 'readme', {repoId: repoId, path: 'trunk'});
+        let res = await Server.callQuiet(WS_BROWSE, 'readme', {repoId: repoId, path: 'trunk'});
         if (!(res._Success && res.found))
-            res = await Server.call(WS_BROWSE, 'readme', {repoId: repoId, path: ''});
+            res = await Server.callQuiet(WS_BROWSE, 'readme', {repoId: repoId, path: ''});
         if (res._Success && res.found) {
             let html;
             if (res.isMarkdown && typeof marked !== 'undefined')
@@ -809,6 +895,10 @@
         document.getElementById('rev-meta').textContent =
             (res.author || 'unknown') + ' · ' + fmtDate(res.date) + ' · r' + rev;
         document.getElementById('rev-message').innerHTML = SvnHubUI.commitMessage(res.message);
+        host.innerHTML = SvnHubUI.spinner('Rendering diff…');
+        await Utils.nextPaint();
+        if (currentRev !== rev || !document.getElementById('rev-diff-host'))
+            return;
         SvnHubUI.renderUnifiedDiff(host, res.diff);
     }
     $$('rev-back').onclick(() => {
@@ -869,14 +959,17 @@
     // secondary panels load in the background, so a slow README/history/stats call
     // cannot leave the visible Files section as an empty shell.
     const startFilesRoute = startMenu === 'go-files' ? {path: currentPath, filePath: currentFilePath} : null;
+    const shouldOpenPendingRevision = pendingRevision && startMenu === 'go-history';
     writeRepoHistory(startMenu, startFilesRoute, 'replace', true);
+    if (shouldOpenPendingRevision)
+        writeRevHistory(pendingRevision, 'replace');
     backgroundLoad('initial view', () => applyView(startMenu, startFilesRoute));
 
     const commitsLoad = backgroundLoad('history', loadCommits);
     backgroundLoad('README', loadReadme);
     backgroundLoad('overview', loadAbout);
     backgroundLoad('contributors', loadAboutContributors);
-    if (pendingRevision && startMenu === 'go-history')
+    if (shouldOpenPendingRevision && !revFromUrl())
         commitsLoad.then(() => focusRevision(pendingRevision));
 
     let repoRes = {_Success: false};
@@ -988,6 +1081,114 @@
     $$('re-name').onEnter(submitEditRepo);
     $$('re-desc').onEnter(submitEditRepo);
     $$('re-default-branch').onEnter(submitEditRepo);
+
+    // ---- delete repository -------------------------------------------------
+    let deleteConfirmName = '';
+    let deletePending = false;
+    const rdErr = document.getElementById('rd-err');
+    const rdLoading = document.getElementById('rd-loading');
+    const rdModal = document.getElementById('repo-delete-modal');
+
+    const dashboardTarget = {
+        page: 'screens/Dashboard/Dashboard',
+        nav: 'repositories',
+        data: {}
+    };
+
+    function repoDeleteName() {
+        return (currentRepo && currentRepo.name) || repoName || repoKey || 'this repository';
+    }
+
+    function showDeleteRepoError(msg) {
+        rdErr.textContent = msg || '';
+        rdErr.classList.toggle('show', !!msg);
+        $$('rd-confirm').element.classList.toggle('input-bad', !!msg);
+    }
+
+    function syncDeleteRepoConfirm() {
+        if (deletePending)
+            return;
+        const typed = $$('rd-confirm').getValue().trim();
+        $$('rd-submit').enable(typed === deleteConfirmName);
+        if (rdErr.textContent)
+            showDeleteRepoError('');
+    }
+
+    function setDeleteRepoPending(on) {
+        deletePending = !!on;
+        if (rdModal) {
+            rdModal.classList.toggle('is-deleting', deletePending);
+            rdModal.setAttribute('aria-busy', deletePending ? 'true' : 'false');
+        }
+        if (rdLoading)
+            rdLoading.hidden = !deletePending;
+        $$('rd-confirm').enable(!deletePending);
+        $$('rd-cancel').enable(!deletePending);
+        if (deletePending) {
+            showDeleteRepoError('');
+            $$('rd-submit').setValue('Deleting...').disable();
+        } else {
+            $$('rd-submit').setValue('Delete repo');
+            syncDeleteRepoConfirm();
+        }
+    }
+
+    function clearSavedRepoState() {
+        Utils.getAndEraseData('repoId');
+        Utils.getAndEraseData('repoKey');
+        Utils.getAndEraseData('repoName');
+        Utils.getAndEraseData('repoSection');
+        Utils.getAndEraseData('repoRevision');
+        Utils.getAndEraseData('repoPath');
+        Utils.getAndEraseData('repoFile');
+        Utils.getAndEraseData('repoIssue');
+        Utils.getAndEraseData('repoMergeRequest');
+    }
+
+    function openDeleteRepo() {
+        if (!currentRepo)
+            return;
+        deleteConfirmName = repoDeleteName();
+        document.getElementById('rd-name').textContent = deleteConfirmName;
+        document.getElementById('rd-confirm-name').textContent = deleteConfirmName;
+        $$('rd-confirm').setValue('');
+        setDeleteRepoPending(false);
+        showDeleteRepoError('');
+        Utils.popup_open('repo-delete-popup', 'rd-confirm');
+    }
+
+    async function submitDeleteRepo() {
+        if (deletePending)
+            return;
+        const confirm = $$('rd-confirm').getValue().trim();
+        if (confirm !== deleteConfirmName) {
+            showDeleteRepoError('Type the repository name exactly to confirm.');
+            $$('rd-confirm').focus();
+            return;
+        }
+        setDeleteRepoPending(true);
+        const res = await Server.call(WS_REPO, 'deleteRepository', {
+            repoId: repoId,
+            confirm: confirm
+        });
+        if (!res._Success) {
+            setDeleteRepoPending(false);
+            return;
+        }
+        Utils.popup_close();
+        if (res.fileCleanupWarning)
+            Utils.toast.warning('Repository removed; file cleanup needs attention');
+        else
+            Utils.toast.success('Repository deleted');
+        clearSavedRepoState();
+        SvnHubUI.routeTarget(dashboardTarget);
+    }
+
+    $$('repo-delete-btn').onclick(openDeleteRepo);
+    $$('rd-cancel').onclick(() => Utils.popup_close());
+    $$('rd-submit').onclick(submitDeleteRepo);
+    $$('rd-confirm').onEnter(submitDeleteRepo);
+    $$('rd-confirm').element.addEventListener('input', syncDeleteRepoConfirm);
 
     // ---- access management -------------------------------------------------
     // A two-pane popup: the list of people with access, and an add/edit pane

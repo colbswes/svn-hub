@@ -8,6 +8,35 @@
         <p class="muted" id="person-error-body">This person could not be found, or the profile failed to load.</p>
     </div>
 
+    <div id="person-loading" class="person-loading" role="status" aria-label="Loading profile">
+        <div class="person-loading-header">
+            <span class="person-loading-avatar skel"></span>
+            <span class="person-loading-copy">
+                <span class="skel person-loading-title"></span>
+                <span class="skel person-loading-handle"></span>
+                <span class="skel person-loading-small"></span>
+            </span>
+            <span class="person-loading-stats">
+                <span class="skel"></span>
+                <span class="skel"></span>
+                <span class="skel"></span>
+            </span>
+        </div>
+        <div class="person-loading-layout">
+            <div class="person-loading-rail">
+                <span class="skel"></span>
+                <span class="skel"></span>
+                <span class="skel"></span>
+            </div>
+            <div class="person-loading-main">
+                <span class="skel"></span>
+                <span class="skel"></span>
+                <span class="skel"></span>
+                <span class="skel"></span>
+            </div>
+        </div>
+    </div>
+
     <div id="person-body" class="person-body" hidden>
         <header class="profile-header person-profile-header">
             <div class="profile-id">
@@ -107,7 +136,7 @@
                         <span class="ins-section-line" aria-hidden="true"></span>
                     </button>
                     <div id="person-activity-body" class="ins-section-body person-expand-body">
-                        <div id="person-activity" class="revision-spine person-activity-list"></div>
+                        <div id="person-activity" class="person-activity-list"></div>
                     </div>
                 </section>
             </main>

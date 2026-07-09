@@ -15,6 +15,14 @@
         return div.innerHTML;
     }
 
+    function activityValue(row, ...keys) {
+        for (const key of keys) {
+            if (row[key] != null && row[key] !== '')
+                return row[key];
+        }
+        return '';
+    }
+
     function fmtDate(ms) {
         return ms ? DateTimeUtils.formatDate(ms) : 'No revisions yet';
     }
@@ -123,22 +131,29 @@
         }
         activityCount = res.rows.length;
         list.innerHTML = res.rows.map((c) => {
-            const when = c.commitTs ? SvnHubUI.fmtDate(c.commitTs) : '';
-            const author = c.author || '(unknown)';
-            const msg = (c.message || '').split('\n')[0].trim();
-            return '<button class="home-activity-row" data-repo-id="' + esc(c.repoId) +
-                '" data-repo-key="' + esc(c.repoKey || '') + '" data-repo-name="' + esc(c.repoName || '') +
-                '" data-revision="' + esc(c.revision) + '">' +
-                    '<span class="home-activity-rev mono">r' + esc(c.revision) + '</span>' +
+            const repoId = Number(activityValue(c, 'repoId', 'repo_id', 'repoid')) || 0;
+            const revision = Number(activityValue(c, 'revision', 'rev')) || 0;
+            const repoKey = activityValue(c, 'repoKey', 'repo_key', 'repokey');
+            const repoName = activityValue(c, 'repoName', 'repo_name', 'reponame');
+            const commitTs = activityValue(c, 'commitTs', 'commit_ts', 'committs');
+            const when = commitTs ? SvnHubUI.fmtDate(commitTs) : '';
+            const author = activityValue(c, 'author') || '(unknown)';
+            const msg = String(activityValue(c, 'message')).split('\n')[0].trim();
+            const rowBody =
+                    '<span class="home-activity-rev mono">r' + esc(revision || activityValue(c, 'revision', 'rev')) + '</span>' +
                     '<span class="home-activity-body">' +
                         '<span class="home-activity-msg">' + esc(msg || '(no message)') + '</span>' +
                         '<span class="home-activity-meta">' +
-                            '<span class="home-activity-repo">' + esc(c.repoName || c.repoKey || '') + '</span>' +
+                            '<span class="home-activity-repo">' + esc(repoName || repoKey || '') + '</span>' +
                             '<span class="home-activity-author mono">@' + esc(author) + '</span>' +
                         '</span>' +
                     '</span>' +
-                    '<span class="home-activity-when">' + esc(when) + '</span>' +
-                '</button>';
+                    '<span class="home-activity-when">' + esc(when) + '</span>';
+            if (repoId > 0 && revision > 0)
+                return '<button type="button" class="home-activity-row" data-repo-id="' + esc(repoId) +
+                    '" data-repo-key="' + esc(repoKey) + '" data-repo-name="' + esc(repoName) +
+                    '" data-revision="' + esc(revision) + '">' + rowBody + '</button>';
+            return '<div class="home-activity-row is-static">' + rowBody + '</div>';
         }).join('');
     }
 
@@ -265,6 +280,14 @@
         openRepo(row);
     }
 
+    function repoFromNode(node) {
+        return {
+            repoId: Number(node.getAttribute('data-repo-id')),
+            repoKey: node.getAttribute('data-repo-key') || '',
+            name: node.getAttribute('data-repo-name') || ''
+        };
+    }
+
     // ---- card interactions: the whole card opens the repository ----
     const cardList = document.getElementById('repo-card-list');
     const recentList = document.getElementById('home-recent-list');
@@ -323,12 +346,12 @@
             const row = evt.target.closest('.home-activity-row');
             if (!row)
                 return;
-            // Deep-link into the repository's History section, focused on this revision.
-            Utils.saveData('repoSection', 'history');
+            evt.preventDefault();
             const rev = Number(row.getAttribute('data-revision'));
-            if (rev)
-                Utils.saveData('repoRevision', rev);
-            openRepoFromCard(row);
+            const repoId = Number(row.getAttribute('data-repo-id'));
+            if (!repoId || !rev)
+                return;
+            SvnHubUI.openRepo(repoFromNode(row), dashboardOrigin, {section: 'history', revision: rev});
         });
     }
 
@@ -442,6 +465,18 @@
         if (res._Success) {
             Utils.popup_close();
             Utils.toast.success('Repository created');
+            if (res.repoId) {
+                Utils.saveData('repoId', Number(res.repoId));
+                Utils.saveData('repoKey', res.repoKey || '');
+                Utils.saveData('repoName', name);
+                Utils.saveData('repoReturnTo', {
+                    page: 'screens/Dashboard/Dashboard',
+                    nav: 'repositories',
+                    data: {}
+                });
+                Router.go('/repository');
+                return;
+            }
             await loadMine();
             loadRecent();
             syncFirstRun();

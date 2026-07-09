@@ -1359,6 +1359,18 @@ class Utils {
         });
     };
 
+    static nextPaint() {
+        return new Promise(function (resolve) {
+            if (typeof window.requestAnimationFrame !== 'function') {
+                setTimeout(resolve, 0);
+                return;
+            }
+            window.requestAnimationFrame(function () {
+                window.requestAnimationFrame(resolve);
+            });
+        });
+    }
+
     /**
      * Loads a new HTML/JS page.  The new page will replace the body of the current page.
      * Also, the loaded code is processed for custom tags / components.
@@ -1396,7 +1408,9 @@ class Utils {
                     document.body.innerHTML = text;
                 Utils.rescan();  // does all the tag replacement
                 window.scrollTo(0, 0);
-                getScript(page + '.js').then(function () {
+                Utils.nextPaint().then(function () {
+                    return getScript(page + '.js');
+                }).then(function () {
                     if (initialFocus) {
                         const ctl = $$(initialFocus);
                         if (ctl)

@@ -12,8 +12,9 @@
             <p class="repo-subhead" id="repo-subhead"></p>
         </div>
         <div class="repo-header-actions" id="repo-header-actions" hidden>
-            <push-button id="repo-edit-btn" class="btn-sm">Edit</push-button>
-            <push-button id="repo-access-btn" class="btn-sm">Access</push-button>
+            <push-button id="repo-edit-btn" class="repo-action-btn">Edit</push-button>
+            <push-button id="repo-access-btn" class="repo-action-btn">Manage access</push-button>
+            <push-button id="repo-delete-btn" class="repo-action-btn repo-action-danger">Delete repo</push-button>
         </div>
         <button type="button" id="checkout-btn" class="checkout-box repo-checkout-copy" aria-label="Copy SVN checkout command">
             <span class="protocol">SVN</span>
@@ -92,13 +93,14 @@
             <section class="card card-pad repo-view repo-files-panel" id="view-files" style="display:none;">
                 <div class="browse-toolbar">
                     <nav class="crumbs" id="browse-crumb" aria-label="Current path"></nav>
-                    <div class="root-chips" role="group" aria-label="Jump to root">
+                    <div class="root-chips" id="root-chips" role="group" aria-label="Jump to root" hidden>
                         <button type="button" class="root-chip mono" id="root-trunk">trunk</button>
                         <button type="button" class="root-chip mono" id="root-branches">branches</button>
                         <button type="button" class="root-chip mono" id="root-tags">tags</button>
                     </div>
                 </div>
                 <div id="browse-grid" class="browse-grid-host" style="width: 100%; margin-top: 12px;"></div>
+                <div id="browse-empty" class="repo-empty browse-empty" hidden></div>
                 <div id="file-viewer" class="file-viewer" style="display:none;">
                     <div class="file-viewer-toolbar">
                         <push-button id="file-back" class="btn-sm file-back">&larr; Files</push-button>
@@ -166,6 +168,34 @@
                 <div class="modal-actions">
                     <push-button id="re-cancel">Cancel</push-button>
                     <push-button id="re-submit" class="btn-accent">Save</push-button>
+                </div>
+            </div>
+        </popup-body>
+    </popup>
+
+    <popup id="repo-delete-popup" width="520px" height="450px">
+        <popup-title>Delete repository</popup-title>
+        <popup-body>
+            <div class="modal-pad repo-delete-modal" id="repo-delete-modal">
+                <div class="repo-delete-warning">
+                    <div class="repo-delete-warning-title">This cannot be undone.</div>
+                    <div class="repo-delete-warning-copy">
+                        Deleting <strong id="rd-name"></strong> permanently removes the repository,
+                        its issues, merge requests, cached commits, access grants, and on-disk SVN data.
+                    </div>
+                </div>
+                <div class="field" style="margin-top:18px;">
+                    <label for="rd-confirm">Type <span class="repo-delete-confirm-name" id="rd-confirm-name"></span> to confirm</label>
+                    <text-input id="rd-confirm" style="width: 100%" autocomplete="off" spellcheck="false"></text-input>
+                    <div class="field-error" id="rd-err"></div>
+                </div>
+                <div class="repo-delete-loading" id="rd-loading" role="status" aria-live="polite" hidden>
+                    <span class="busy-spin" aria-hidden="true"></span>
+                    <span>Deleting repository...</span>
+                </div>
+                <div class="modal-actions">
+                    <push-button id="rd-cancel">Cancel</push-button>
+                    <push-button id="rd-submit" class="btn-danger" disabled>Delete repo</push-button>
                 </div>
             </div>
         </popup-body>
